@@ -47,20 +47,11 @@ export default function Home() {
   const isDirty = systemPrompt !== originalPrompt && originalPrompt !== "";
 
   async function handleLoadPrompt() {
-    const pat = storage.getGhPat();
-    if (!pat) {
-      setError("설정에서 GitHub PAT를 먼저 입력해주세요.");
-      setShowSettings(true);
-      return;
-    }
-
     setLoadingPrompt(true);
     setError("");
 
     try {
-      const res = await fetch("/api/github/load", {
-        headers: { "x-github-pat": pat },
-      });
+      const res = await fetch("/api/github/load");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
@@ -80,32 +71,14 @@ export default function Home() {
     }
 
     const model = MODELS.find((m) => m.id === selectedModelId)!;
-    const anthropicKey = storage.getAnthropicKey();
-    const googleKey = storage.getGoogleKey();
-
-    if (model.provider === "anthropic" && !anthropicKey) {
-      setError("설정에서 Anthropic API 키를 먼저 입력해주세요.");
-      setShowSettings(true);
-      return;
-    }
-    if (model.provider === "google" && !googleKey) {
-      setError("설정에서 Google API 키를 먼저 입력해주세요.");
-      setShowSettings(true);
-      return;
-    }
-
     setLoading(true);
     setError("");
     setResult(null);
 
     try {
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (model.provider === "anthropic") headers["x-anthropic-key"] = anthropicKey;
-      if (model.provider === "google") headers["x-google-key"] = googleKey;
-
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelId: selectedModelId, systemPrompt, userMessage }),
       });
 

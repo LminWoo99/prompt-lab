@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { storage } from "@/lib/storage";
 
 interface Props {
   promptContent: string;
@@ -24,22 +23,13 @@ export default function PushModal({ promptContent, onClose, onSuccess }: Props) 
       return;
     }
 
-    const pat = storage.getGhPat();
-    if (!pat) {
-      setError("설정에서 GitHub PAT를 먼저 입력해주세요.");
-      return;
-    }
-
     setLoading(true);
     setError("");
 
     try {
       const res = await fetch("/api/github/push", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-github-pat": pat,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: promptContent,
           commitMessage: commitMessage.trim(),

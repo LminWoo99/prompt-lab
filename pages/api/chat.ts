@@ -19,8 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     if (model.provider === "anthropic") {
-      const apiKey = req.headers["x-anthropic-key"] as string;
-      if (!apiKey) return res.status(401).json({ error: "Anthropic API 키가 없습니다." });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: "서버에 Anthropic API 키가 설정되지 않았습니다." });
 
       const client = new Anthropic({ apiKey });
       const response = await client.messages.create({
@@ -34,17 +34,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const outputTokens = response.usage.output_tokens;
       const text = response.content[0].type === "text" ? response.content[0].text : "";
 
-      return res.status(200).json({
-        text,
-        inputTokens,
-        outputTokens,
-        elapsedMs: Date.now() - startTime,
-      });
+      return res.status(200).json({ text, inputTokens, outputTokens, elapsedMs: Date.now() - startTime });
     }
 
     if (model.provider === "google") {
-      const apiKey = req.headers["x-google-key"] as string;
-      if (!apiKey) return res.status(401).json({ error: "Google API 키가 없습니다." });
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: "서버에 Google API 키가 설정되지 않았습니다." });
 
       const genAI = new GoogleGenerativeAI(apiKey);
       const gemini = genAI.getGenerativeModel({
@@ -58,12 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
       const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
 
-      return res.status(200).json({
-        text,
-        inputTokens,
-        outputTokens,
-        elapsedMs: Date.now() - startTime,
-      });
+      return res.status(200).json({ text, inputTokens, outputTokens, elapsedMs: Date.now() - startTime });
     }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "알 수 없는 오류";
