@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { Octokit } from "@octokit/rest";
 import authOptions from "../auth/[...nextauth]";
 
-const REPO_OWNER = "yun0-2";
+const REPO_OWNER = "RelationshipLogic";
 const REPO_NAME = "RelationshipLogic";
 const FILE_PATH = "experiments/psych-engine/prompts/system_v2.md";
 const BASE_BRANCH = "main";
