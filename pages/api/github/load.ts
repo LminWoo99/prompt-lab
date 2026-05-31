@@ -15,7 +15,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== "GET") return res.status(405).end();
 
   const session = (await getServerSession(req, res, authOptions)) as SessionWithToken | null;
-  if (!session?.accessToken) return res.status(401).json({ error: "로그인이 필요합니다." });
+  if (!session?.accessToken) {
+    return res.status(401).json({
+      error: "로그인이 필요합니다.",
+      debug: { sessionExists: !!session, hasAccessToken: !!session?.accessToken },
+    });
+  }
 
   try {
     const octokit = new Octokit({ auth: session.accessToken });
