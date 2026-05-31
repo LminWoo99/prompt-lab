@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { MODELS, calcCost } from "@/lib/models";
 import { storage } from "@/lib/storage";
 import SettingsModal from "@/components/SettingsModal";
@@ -262,7 +263,7 @@ export default function Home() {
                   prose-th:text-[#e8eaed] prose-th:border-[#3c3c3c]
                   prose-td:border-[#3c3c3c]
                 ">
-                  <ReactMarkdown>{systemPrompt || "*프롬프트가 없습니다.*"}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{systemPrompt || "*프롬프트가 없습니다.*"}</ReactMarkdown>
                 </div>
               </div>
             ) : (
