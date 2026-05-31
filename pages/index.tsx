@@ -13,6 +13,36 @@ interface TestResult {
   cost: number;
 }
 
+type DiffLine = { type: "unchanged" | "added" | "removed"; line: string };
+
+function computeLineDiff(original: string, modified: string): DiffLine[] {
+  const a = original.split("\n");
+  const b = modified.split("\n");
+  const m = a.length;
+  const n = b.length;
+
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+
+  const result: DiffLine[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      result.unshift({ type: "unchanged", line: a[i - 1] });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: "added", line: b[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: "removed", line: a[i - 1] });
+      i--;
+    }
+  }
+  return result;
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -26,6 +56,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPush, setShowPush] = useState(false);
   const [prUrl, setPrUrl] = useState("");
+  const [showDiff, setShowDiff] = useState(false);
 
   useEffect(() => {
     const draft = storage.getPromptDraft();
@@ -49,6 +80,7 @@ export default function Home() {
   async function handleLoadPrompt() {
     setLoadingPrompt(true);
     setError("");
+    setShowDiff(false);
 
     try {
       const res = await fetch("/api/github/load");
@@ -98,7 +130,10 @@ export default function Home() {
     setShowPush(false);
     setPrUrl(url);
     setOriginalPrompt(systemPrompt);
+    setShowDiff(false);
   }
+
+  const diffLines = isDirty && showDiff ? computeLineDiff(originalPrompt, systemPrompt) : [];
 
   if (status === "loading") {
     return (
@@ -131,17 +166,17 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-gray-900">Prompt Lab</h1>
-          <div className="flex items-center gap-1.5">
-            <img src={session.user?.image ?? ""} alt="avatar" className="w-5 h-5 rounded-full" />
-            <span className="text-sm text-gray-500">{session.user?.name}</span>
+      <header className="bg-white border-b px-4 md:px-6 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="text-base md:text-lg font-semibold text-gray-900 shrink-0">Prompt Lab</h1>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <img src={session.user?.image ?? ""} alt="avatar" className="w-5 h-5 rounded-full shrink-0" />
+            <span className="text-xs md:text-sm text-gray-500 truncate">{session.user?.name}</span>
           </div>
         </div>
         <button
           onClick={() => setShowSettings(true)}
-          className="text-sm text-gray-500 hover:text-gray-900 border rounded-lg px-3 py-1.5"
+          className="text-sm text-gray-500 hover:text-gray-900 border rounded-lg px-3 py-1.5 shrink-0"
         >
           ⚙ 설정
         </button>
@@ -149,14 +184,14 @@ export default function Home() {
 
       {/* PR 성공 배너 */}
       {prUrl && (
-        <div className="bg-green-50 border-b border-green-200 px-6 py-2 flex items-center justify-between">
+        <div className="bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between">
           <span className="text-sm text-green-700">
             PR이 생성되었습니다.{" "}
             <a href={prUrl} target="_blank" rel="noreferrer" className="underline font-medium">
               PR 보기
             </a>
           </span>
-          <button onClick={() => setPrUrl("")} className="text-green-500 hover:text-green-700 text-sm">
+          <button onClick={() => setPrUrl("")} className="text-green-500 hover:text-green-700 text-sm ml-2">
             ✕
           </button>
         </div>
@@ -164,19 +199,20 @@ export default function Home() {
 
       {/* 에러 배너 */}
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center justify-between">
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-center justify-between">
           <span className="text-sm text-red-700">{error}</span>
-          <button onClick={() => setError("")} className="text-red-400 hover:text-red-600 text-sm">
+          <button onClick={() => setError("")} className="text-red-400 hover:text-red-600 text-sm ml-2">
             ✕
           </button>
         </div>
       )}
 
       {/* Main */}
-      <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 49px)" }}>
+      <div className="flex flex-col md:flex-row flex-1 overflow-auto md:overflow-hidden">
         {/* Left: Prompt Editor */}
-        <div className="w-1/2 flex flex-col border-r bg-white p-4 gap-3">
-          <div className="flex items-center justify-between">
+        <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r bg-white p-4 gap-3 md:overflow-hidden">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">시스템 프롬프트</span>
               {isDirty && (
@@ -185,7 +221,19 @@ export default function Home() {
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {isDirty && (
+                <button
+                  onClick={() => setShowDiff((v) => !v)}
+                  className={`text-sm border rounded-lg px-3 py-1.5 ${
+                    showDiff
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "text-gray-600 hover:text-gray-900 border-gray-300"
+                  }`}
+                >
+                  변경 내용
+                </button>
+              )}
               <button
                 onClick={handleLoadPrompt}
                 disabled={loadingPrompt}
@@ -204,23 +252,48 @@ export default function Home() {
             </div>
           </div>
 
-          <textarea
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="시스템 프롬프트를 입력하거나 '최신 로드'로 GitHub에서 불러오세요."
-            className="flex-1 border rounded-lg p-3 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          {/* Diff view */}
+          {showDiff && isDirty ? (
+            <div className="flex-1 border rounded-lg overflow-auto bg-gray-950 min-h-[300px] md:min-h-0">
+              <pre className="text-xs font-mono p-3 leading-relaxed">
+                {diffLines.map((dl, idx) => (
+                  <div
+                    key={idx}
+                    className={
+                      dl.type === "added"
+                        ? "bg-green-900/60 text-green-300"
+                        : dl.type === "removed"
+                        ? "bg-red-900/60 text-red-300"
+                        : "text-gray-400"
+                    }
+                  >
+                    <span className="select-none mr-2 opacity-60">
+                      {dl.type === "added" ? "+" : dl.type === "removed" ? "-" : " "}
+                    </span>
+                    {dl.line}
+                  </div>
+                ))}
+              </pre>
+            </div>
+          ) : (
+            <textarea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="시스템 프롬프트를 입력하거나 '최신 로드'로 GitHub에서 불러오세요."
+              className="flex-1 border rounded-lg p-3 text-sm font-mono text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[300px] md:min-h-0"
+            />
+          )}
         </div>
 
         {/* Right: Test Panel */}
-        <div className="w-1/2 flex flex-col p-4 gap-3 overflow-auto">
+        <div className="w-full md:w-1/2 flex flex-col p-4 gap-3 overflow-auto">
           {/* Model selector */}
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-700">모델</span>
+            <span className="text-sm font-medium text-gray-700 shrink-0">모델</span>
             <select
               value={selectedModelId}
               onChange={(e) => setSelectedModelId(e.target.value)}
-              className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 md:flex-none border rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -238,7 +311,7 @@ export default function Home() {
               onChange={(e) => setUserMessage(e.target.value)}
               placeholder="테스트할 메시지를 입력하세요."
               rows={4}
-              className="border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border rounded-lg p-3 text-sm text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -253,13 +326,13 @@ export default function Home() {
           {/* Result */}
           {result && (
             <div className="flex flex-col gap-2">
-              <div className="flex gap-4 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
                 <span>소요: {(result.elapsedMs / 1000).toFixed(1)}s</span>
                 <span>입력: {result.inputTokens.toLocaleString()} tok</span>
                 <span>출력: {result.outputTokens.toLocaleString()} tok</span>
                 <span className="font-medium text-gray-700">비용: ${result.cost.toFixed(6)}</span>
               </div>
-              <div className="border rounded-lg p-3 text-sm bg-white whitespace-pre-wrap">
+              <div className="border rounded-lg p-3 text-sm text-gray-900 bg-white whitespace-pre-wrap">
                 {result.text}
               </div>
             </div>
