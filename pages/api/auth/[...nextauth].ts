@@ -24,9 +24,11 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      console.log("[Session callback] token.accessToken:", token.accessToken);
       if (token.accessToken) {
         session.accessToken = token.accessToken as string;
       }
+      console.log("[Session callback] session.accessToken:", session.accessToken);
       return session;
     },
   },
