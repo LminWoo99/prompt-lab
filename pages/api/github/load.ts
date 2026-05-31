@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { Octokit } from "@octokit/rest";
-import authOptions from "../auth/[...nextauth]";
+import { authOptions } from "../auth/[...nextauth]";
 
 const REPO_OWNER = "RelationshipLogic";
 const REPO_NAME = "RelationshipLogic";
