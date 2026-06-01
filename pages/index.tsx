@@ -56,6 +56,7 @@ export default function Home() {
   const [showPush, setShowPush] = useState(false);
   const [prUrl, setPrUrl] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
+  const [promptCollapsed, setPromptCollapsed] = useState(false);
 
   useEffect(() => {
     const draft = storage.getPromptDraft();
@@ -188,21 +189,41 @@ export default function Home() {
         {/* Left: Prompt Editor */}
         <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-[#3c3c3c] bg-[#1a1a1a] md:overflow-hidden">
           {/* Panel header */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] gap-2 flex-wrap">
-            <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
-              {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === mode
-                      ? "bg-[#2d2d2d] text-[#e8eaed]"
-                      : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                  }`}
-                >
-                  {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
-                </button>
-              ))}
+          <div
+            className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] gap-2 flex-wrap md:cursor-default cursor-pointer"
+            onClick={(e) => {
+              // 모바일에서 헤더 클릭 시 토글 (버튼 클릭 제외)
+              if (window.innerWidth < 768 && (e.target as HTMLElement).tagName !== "BUTTON") {
+                setPromptCollapsed((v) => !v);
+              }
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
+                {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => { setViewMode(mode); setPromptCollapsed(false); }}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      viewMode === mode
+                        ? "bg-[#2d2d2d] text-[#e8eaed]"
+                        : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
+                  </button>
+                ))}
+              </div>
+              {/* 모바일 접기 버튼 */}
+              <button
+                onClick={() => setPromptCollapsed((v) => !v)}
+                className="md:hidden text-[#9aa0a6] hover:text-[#e8eaed] p-1 transition-colors"
+                aria-label={promptCollapsed ? "펼치기" : "접기"}
+              >
+                <svg className={`w-4 h-4 transition-transform ${promptCollapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
             </div>
             <div className="flex items-center gap-2">
               {isDirty && (
@@ -227,7 +248,7 @@ export default function Home() {
           </div>
 
           {/* Editor area */}
-          <div className="flex-1 overflow-auto min-h-[300px] md:min-h-0">
+          <div className={`flex-1 overflow-auto md:min-h-0 transition-all ${promptCollapsed ? "hidden md:flex" : "flex flex-col"} h-[55vh] md:h-auto`}>
             {viewMode === "diff" && isDirty ? (
               <pre className="text-xs font-mono p-4 leading-relaxed h-full">
                 {diffLines.map((dl, idx) => (
@@ -271,7 +292,7 @@ export default function Home() {
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 placeholder="시스템 프롬프트를 입력하거나 '최신 로드'로 GitHub에서 불러오세요."
-                className="w-full h-full p-4 text-sm font-mono text-[#e8eaed] bg-transparent placeholder-[#4a4a4a] resize-none focus:outline-none leading-relaxed"
+                className="w-full flex-1 p-4 text-sm font-mono text-[#e8eaed] bg-transparent placeholder-[#4a4a4a] resize-none focus:outline-none leading-relaxed"
               />
             )}
           </div>
