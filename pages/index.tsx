@@ -212,7 +212,7 @@ export default function Home() {
 
         {/* Left: Prompt Editor — 모바일에서 탭 기반으로 표시 */}
         <div className={`
-          w-full md:w-1/2 flex flex-col md:border-r border-[#3c3c3c] bg-[#1a1a1a] overflow-hidden min-h-0
+          flex-1 md:flex-none md:w-1/2 flex flex-col md:border-r border-[#3c3c3c] bg-[#1a1a1a] overflow-hidden min-h-0
           ${mobileTab === "prompt" ? "flex" : "hidden md:flex"}
         `}>
           {/* Panel toolbar */}
@@ -300,7 +300,7 @@ export default function Home() {
 
         {/* Right: Test Panel — 모바일에서 탭 기반으로 표시 */}
         <div className={`
-          w-full md:w-1/2 flex flex-col overflow-auto bg-[#131314]
+          flex-1 md:flex-none md:w-1/2 flex flex-col overflow-auto bg-[#131314]
           ${mobileTab === "test" ? "flex" : "hidden md:flex"}
         `}>
           <div className="flex flex-col gap-4 p-4">
