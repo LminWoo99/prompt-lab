@@ -56,7 +56,7 @@ export default function Home() {
   const [showPush, setShowPush] = useState(false);
   const [prUrl, setPrUrl] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
-  const [promptCollapsed, setPromptCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"prompt" | "test">("prompt");
 
   useEffect(() => {
     const draft = storage.getPromptDraft();
@@ -183,56 +183,61 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main */}
-      <div className="flex flex-col md:flex-row flex-1 overflow-auto md:overflow-hidden">
+      {/* 모바일 탭 */}
+      <div className="md:hidden flex border-b border-[#3c3c3c] bg-[#1e1e1e] shrink-0">
+        <button
+          onClick={() => setMobileTab("prompt")}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            mobileTab === "prompt"
+              ? "text-[#8ab4f8] border-b-2 border-[#8ab4f8]"
+              : "text-[#9aa0a6]"
+          }`}
+        >
+          시스템 프롬프트 {isDirty && <span className="text-[#fdd663] text-xs ml-1">●</span>}
+        </button>
+        <button
+          onClick={() => setMobileTab("test")}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            mobileTab === "test"
+              ? "text-[#8ab4f8] border-b-2 border-[#8ab4f8]"
+              : "text-[#9aa0a6]"
+          }`}
+        >
+          테스트 {result && <span className="text-[#81c995] text-xs ml-1">●</span>}
+        </button>
+      </div>
 
-        {/* Left: Prompt Editor */}
-        <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-[#3c3c3c] bg-[#1a1a1a] md:overflow-hidden">
-          {/* Panel header */}
-          <div
-            className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] gap-2 flex-wrap md:cursor-default cursor-pointer"
-            onClick={(e) => {
-              // 모바일에서 헤더 클릭 시 토글 (버튼 클릭 제외)
-              if (window.innerWidth < 768 && (e.target as HTMLElement).tagName !== "BUTTON") {
-                setPromptCollapsed((v) => !v);
-              }
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
-                {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => { setViewMode(mode); setPromptCollapsed(false); }}
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === mode
-                        ? "bg-[#2d2d2d] text-[#e8eaed]"
-                        : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                    }`}
-                  >
-                    {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
-                  </button>
-                ))}
-              </div>
-              {/* 모바일 접기 버튼 */}
-              <button
-                onClick={() => setPromptCollapsed((v) => !v)}
-                className="md:hidden text-[#9aa0a6] hover:text-[#e8eaed] p-1 transition-colors"
-                aria-label={promptCollapsed ? "펼치기" : "접기"}
-              >
-                <svg className={`w-4 h-4 transition-transform ${promptCollapsed ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                </svg>
-              </button>
+      {/* Main */}
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+
+        {/* Left: Prompt Editor — 모바일에서 탭 기반으로 표시 */}
+        <div className={`
+          w-full md:w-1/2 flex flex-col md:border-r border-[#3c3c3c] bg-[#1a1a1a] overflow-hidden
+          ${mobileTab === "prompt" ? "flex" : "hidden md:flex"}
+        `}>
+          {/* Panel toolbar */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] gap-2 shrink-0">
+            <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
+              {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === mode ? "bg-[#2d2d2d] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                  }`}
+                >
+                  {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-2">
               {isDirty && (
-                <span className="text-xs bg-[#3a2d00] text-[#fdd663] px-2 py-0.5 rounded-full">수정됨</span>
+                <span className="hidden sm:inline text-xs bg-[#3a2d00] text-[#fdd663] px-2 py-0.5 rounded-full">수정됨</span>
               )}
               <button
                 onClick={handleLoadPrompt}
                 disabled={loadingPrompt}
-                className="text-xs text-[#8ab4f8] hover:text-[#aecbfa] border border-[#3c5a8a] hover:border-[#5c7aaa] rounded-lg px-3 py-1.5 disabled:opacity-40 transition-colors"
+                className="text-xs text-[#8ab4f8] hover:text-[#aecbfa] border border-[#3c5a8a] rounded-lg px-3 py-1.5 disabled:opacity-40 transition-colors"
               >
                 {loadingPrompt ? "로드 중..." : "최신 로드"}
               </button>
@@ -248,17 +253,15 @@ export default function Home() {
           </div>
 
           {/* Editor area */}
-          <div className={`flex-1 overflow-auto md:min-h-0 transition-all ${promptCollapsed ? "hidden md:flex" : "flex flex-col"} h-[55vh] md:h-auto`}>
+          <div className="flex-1 overflow-auto flex flex-col">
             {viewMode === "diff" && isDirty ? (
-              <pre className="text-xs font-mono p-4 leading-relaxed h-full">
+              <pre className="text-xs font-mono p-4 leading-relaxed flex-1">
                 {diffLines.map((dl, idx) => (
                   <div
                     key={idx}
                     className={
-                      dl.type === "added"
-                        ? "bg-[#1a3a1a] text-[#81c995]"
-                        : dl.type === "removed"
-                        ? "bg-[#3a1a1a] text-[#f28b82]"
+                      dl.type === "added" ? "bg-[#1a3a1a] text-[#81c995]"
+                        : dl.type === "removed" ? "bg-[#3a1a1a] text-[#f28b82]"
                         : "text-[#5c5c5c]"
                     }
                   >
@@ -270,7 +273,7 @@ export default function Home() {
                 ))}
               </pre>
             ) : viewMode === "preview" ? (
-              <div className="p-4 h-full overflow-auto">
+              <div className="p-4 overflow-auto flex-1">
                 <div className="prose prose-invert prose-sm max-w-none
                   prose-headings:text-[#e8eaed] prose-headings:font-semibold
                   prose-p:text-[#bdc1c6] prose-p:leading-relaxed
@@ -278,11 +281,8 @@ export default function Home() {
                   prose-code:text-[#8ab4f8] prose-code:bg-[#2d2d2d] prose-code:px-1 prose-code:rounded
                   prose-pre:bg-[#2d2d2d] prose-pre:border prose-pre:border-[#3c3c3c]
                   prose-blockquote:border-[#8ab4f8] prose-blockquote:text-[#9aa0a6]
-                  prose-hr:border-[#3c3c3c]
-                  prose-li:text-[#bdc1c6]
-                  prose-table:text-[#bdc1c6]
-                  prose-th:text-[#e8eaed] prose-th:border-[#3c3c3c]
-                  prose-td:border-[#3c3c3c]
+                  prose-hr:border-[#3c3c3c] prose-li:text-[#bdc1c6]
+                  prose-table:text-[#bdc1c6] prose-th:text-[#e8eaed] prose-th:border-[#3c3c3c] prose-td:border-[#3c3c3c]
                 ">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{systemPrompt || "*프롬프트가 없습니다.*"}</ReactMarkdown>
                 </div>
@@ -298,12 +298,11 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right: Test Panel */}
-        <div className="w-full md:w-1/2 flex flex-col overflow-auto bg-[#131314]">
-          <div className="p-4 border-b border-[#3c3c3c]">
-            <span className="text-xs font-medium text-[#9aa0a6] uppercase tracking-wider">테스트 실행</span>
-          </div>
-
+        {/* Right: Test Panel — 모바일에서 탭 기반으로 표시 */}
+        <div className={`
+          w-full md:w-1/2 flex flex-col overflow-auto bg-[#131314]
+          ${mobileTab === "test" ? "flex" : "hidden md:flex"}
+        `}>
           <div className="flex flex-col gap-4 p-4">
             {/* Model selector */}
             <div className="flex flex-col gap-1.5">
@@ -339,7 +338,6 @@ export default function Home() {
               {loading ? "실행 중..." : "테스트 실행"}
             </button>
 
-            {/* Result */}
             {result && (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap gap-3 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-2.5">
