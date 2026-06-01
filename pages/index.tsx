@@ -147,7 +147,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#131314] flex flex-col text-[#e8eaed]">
+    <div className="h-screen bg-[#131314] flex flex-col text-[#e8eaed] overflow-hidden">
       {/* Header */}
       <header className="bg-[#1e1e1e] border-b border-[#3c3c3c] px-4 md:px-6 py-3 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -208,11 +208,11 @@ export default function Home() {
       </div>
 
       {/* Main */}
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
 
         {/* Left: Prompt Editor — 모바일에서 탭 기반으로 표시 */}
         <div className={`
-          w-full md:w-1/2 flex flex-col md:border-r border-[#3c3c3c] bg-[#1a1a1a] overflow-hidden
+          w-full md:w-1/2 flex flex-col md:border-r border-[#3c3c3c] bg-[#1a1a1a] overflow-hidden min-h-0
           ${mobileTab === "prompt" ? "flex" : "hidden md:flex"}
         `}>
           {/* Panel toolbar */}
