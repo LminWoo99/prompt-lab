@@ -2,10 +2,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { Octokit } from "@octokit/rest";
 import { authOptions } from "../auth/[...nextauth]";
+import { RELATIONS } from "@/lib/relations";
 
 const REPO_OWNER = "RelationshipLogic";
 const REPO_NAME = "RelationshipLogic";
-const FILE_PATH = "experiments/psych-engine/prompts/system_v2.md";
+const RELATIONS_DIR = "experiments/psych-engine/prompts/relations";
 const BASE_BRANCH = "main";
 
 interface SessionWithToken {
@@ -24,16 +25,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = (await getServerSession(req, res, authOptions)) as SessionWithToken | null;
   if (!session?.accessToken) return res.status(401).json({ error: "로그인이 필요합니다." });
 
-  const { content, commitMessage, prTitle, prBody } = req.body as {
+  const { relation, content, commitMessage, prTitle, prBody } = req.body as {
+    relation: string;
     content: string;
     commitMessage: string;
     prTitle: string;
     prBody: string;
   };
 
-  if (!content || !commitMessage || !prTitle) {
+  if (!relation || !content || !commitMessage || !prTitle) {
     return res.status(400).json({ error: "필수 항목이 누락되었습니다." });
   }
+  if (!RELATIONS.some((r) => r.id === relation)) {
+    return res.status(400).json({ error: "지원하지 않는 관계 유형입니다." });
+  }
+
+  // core.md는 캐시 프리픽스라 랩에서 수정하지 않는다 — 관계 모듈 파일만 대상으로 한다.
+  const filePath = `${RELATIONS_DIR}/${relation}.md`;
 
   try {
     const octokit = new Octokit({ auth: session.accessToken });
@@ -56,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: fileData } = await octokit.repos.getContent({
       owner: REPO_OWNER,
       repo: REPO_NAME,
-      path: FILE_PATH,
+      path: filePath,
       ref: branchName,
     });
     const fileSha = "sha" in fileData ? fileData.sha : undefined;
@@ -64,7 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await octokit.repos.createOrUpdateFileContents({
       owner: REPO_OWNER,
       repo: REPO_NAME,
-      path: FILE_PATH,
+      path: filePath,
       message: commitMessage,
       content: Buffer.from(content).toString("base64"),
       branch: branchName,

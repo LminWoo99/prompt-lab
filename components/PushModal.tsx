@@ -1,12 +1,14 @@
 import { useState } from "react";
 
 interface Props {
+  relation: string;
+  relationLabel: string;
   promptContent: string;
   onClose: () => void;
   onSuccess: (prUrl: string) => void;
 }
 
-export default function PushModal({ promptContent, onClose, onSuccess }: Props) {
+export default function PushModal({ relation, relationLabel, promptContent, onClose, onSuccess }: Props) {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const rand = Math.random().toString(36).slice(2, 6);
   const previewBranch = `feature/prompt/${today}/${rand}`;
@@ -29,6 +31,7 @@ export default function PushModal({ promptContent, onClose, onSuccess }: Props) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          relation,
           content: promptContent,
           commitMessage: commitMessage.trim(),
           prTitle: prTitle.trim(),
@@ -48,7 +51,10 @@ export default function PushModal({ promptContent, onClose, onSuccess }: Props) 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-2xl w-full max-w-lg p-6">
-        <h2 className="text-sm font-semibold text-[#e8eaed] mb-5">깃에 반영하기</h2>
+        <h2 className="text-sm font-semibold text-[#e8eaed] mb-1">깃에 반영하기</h2>
+        <p className="text-xs text-[#9aa0a6] mb-4">
+          관계 모듈만 반영됩니다 — <span className="text-[#8ab4f8] font-mono">relations/{relation}.md</span> ({relationLabel}). core.md는 대상이 아닙니다.
+        </p>
 
         <div className="space-y-4">
           <div>

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { MODELS, calcCost } from "@/lib/models";
 import { storage } from "@/lib/storage";
+import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
 
@@ -44,8 +45,11 @@ type ViewMode = "edit" | "preview" | "diff";
 
 export default function Home() {
   const { data: session, status } = useSession();
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [originalPrompt, setOriginalPrompt] = useState("");
+  const [selectedRelation, setSelectedRelation] = useState<RelationId>(RELATIONS[0].id);
+  const [coreContent, setCoreContent] = useState("");
+  const [relationModule, setRelationModule] = useState("");
+  const [originalRelationModule, setOriginalRelationModule] = useState("");
+  const [showCore, setShowCore] = useState(false);
   const [userMessage, setUserMessage] = useState("");
   const [selectedModelId, setSelectedModelId] = useState(MODELS[0].id);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -59,27 +63,32 @@ export default function Home() {
   const [mobileTab, setMobileTab] = useState<"prompt" | "test">("prompt");
 
   useEffect(() => {
-    const draft = storage.getPromptDraft();
-    if (draft) setSystemPrompt(draft);
+    const savedRelation = storage.getSelectedRelation();
+    const initialRelation = (RELATIONS.find((r) => r.id === savedRelation)?.id ?? RELATIONS[0].id) as RelationId;
+    setSelectedRelation(initialRelation);
+    const draft = storage.getRelationModuleDraft(initialRelation);
+    if (draft) setRelationModule(draft);
     const savedModel = storage.getSelectedModel();
     if (savedModel && MODELS.find((m) => m.id === savedModel)) setSelectedModelId(savedModel);
   }, []);
 
-  useEffect(() => { storage.setPromptDraft(systemPrompt); }, [systemPrompt]);
+  useEffect(() => { storage.setRelationModuleDraft(selectedRelation, relationModule); }, [selectedRelation, relationModule]);
   useEffect(() => { storage.setSelectedModel(selectedModelId); }, [selectedModelId]);
+  useEffect(() => { storage.setSelectedRelation(selectedRelation); }, [selectedRelation]);
 
-  const isDirty = systemPrompt !== originalPrompt && originalPrompt !== "";
+  const isDirty = relationModule !== originalRelationModule && originalRelationModule !== "";
 
-  async function handleLoadPrompt() {
+  async function handleLoadPrompt(relation: RelationId = selectedRelation) {
     setLoadingPrompt(true);
     setError("");
     setViewMode("edit");
     try {
-      const res = await fetch("/api/github/load");
+      const res = await fetch(`/api/github/load?relation=${relation}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setSystemPrompt(data.content);
-      setOriginalPrompt(data.content);
+      setCoreContent(data.core);
+      setRelationModule(data.relationModule);
+      setOriginalRelationModule(data.relationModule);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "프롬프트 로드 실패");
     } finally {
@@ -87,15 +96,26 @@ export default function Home() {
     }
   }
 
+  function handleRelationChange(relation: RelationId) {
+    setSelectedRelation(relation);
+    setOriginalRelationModule("");
+    setResult(null);
+    const draft = storage.getRelationModuleDraft(relation);
+    setRelationModule(draft);
+    handleLoadPrompt(relation);
+  }
+
   async function handleTest() {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
+    if (!coreContent) { setError("먼저 '최신 로드'로 프롬프트를 불러와주세요."); return; }
     const model = MODELS.find((m) => m.id === selectedModelId)!;
     setLoading(true); setError(""); setResult(null);
     try {
+      const assembled = assemblePrompt(coreContent, relationModule);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: selectedModelId, systemPrompt, userMessage }),
+        body: JSON.stringify({ modelId: selectedModelId, systemPrompt: assembled, userMessage }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -108,10 +128,11 @@ export default function Home() {
   }
 
   function handlePushSuccess(url: string) {
-    setShowPush(false); setPrUrl(url); setOriginalPrompt(systemPrompt); setViewMode("edit");
+    setShowPush(false); setPrUrl(url); setOriginalRelationModule(relationModule); setViewMode("edit");
   }
 
-  const diffLines = viewMode === "diff" && isDirty ? computeLineDiff(originalPrompt, systemPrompt) : [];
+  const selectedRelationLabel = RELATIONS.find((r) => r.id === selectedRelation)?.label ?? selectedRelation;
+  const diffLines = viewMode === "diff" && isDirty ? computeLineDiff(originalRelationModule, relationModule) : [];
 
   if (status === "loading") {
     return (
@@ -193,7 +214,7 @@ export default function Home() {
               : "text-[#9aa0a6]"
           }`}
         >
-          시스템 프롬프트 {isDirty && <span className="text-[#fdd663] text-xs ml-1">●</span>}
+          관계 모듈 {isDirty && <span className="text-[#fdd663] text-xs ml-1">●</span>}
         </button>
         <button
           onClick={() => setMobileTab("test")}
@@ -216,43 +237,71 @@ export default function Home() {
           ${mobileTab === "prompt" ? "flex" : "hidden md:flex"}
         `}>
           {/* Panel toolbar */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#3c3c3c] gap-2 shrink-0">
-            <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
-              {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === mode ? "bg-[#2d2d2d] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                  }`}
-                >
-                  {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              {isDirty && (
-                <span className="hidden sm:inline text-xs bg-[#3a2d00] text-[#fdd663] px-2 py-0.5 rounded-full">수정됨</span>
-              )}
-              <button
-                onClick={handleLoadPrompt}
-                disabled={loadingPrompt}
-                className="text-xs text-[#8ab4f8] hover:text-[#aecbfa] border border-[#3c5a8a] rounded-lg px-3 py-1.5 disabled:opacity-40 transition-colors"
+          <div className="flex flex-col gap-2 px-4 py-2.5 border-b border-[#3c3c3c] shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <select
+                value={selectedRelation}
+                onChange={(e) => handleRelationChange(e.target.value as RelationId)}
+                className="bg-[#131314] border border-[#3c3c3c] text-[#e8eaed] rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#8ab4f8] transition-colors"
               >
-                {loadingPrompt ? "로드 중..." : "최신 로드"}
-              </button>
-              {isDirty && (
+                {RELATIONS.map((r) => (
+                  <option key={r.id} value={r.id}>{r.label}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2">
+                {isDirty && (
+                  <span className="hidden sm:inline text-xs bg-[#3a2d00] text-[#fdd663] px-2 py-0.5 rounded-full">수정됨</span>
+                )}
                 <button
-                  onClick={() => setShowPush(true)}
-                  className="text-xs bg-[#8ab4f8] text-[#131314] font-semibold rounded-lg px-3 py-1.5 hover:bg-[#aecbfa] transition-colors"
+                  onClick={() => handleLoadPrompt()}
+                  disabled={loadingPrompt}
+                  className="text-xs text-[#8ab4f8] hover:text-[#aecbfa] border border-[#3c5a8a] rounded-lg px-3 py-1.5 disabled:opacity-40 transition-colors"
                 >
-                  깃에 반영
+                  {loadingPrompt ? "로드 중..." : "최신 로드"}
                 </button>
-              )}
+                {isDirty && (
+                  <button
+                    onClick={() => setShowPush(true)}
+                    className="text-xs bg-[#8ab4f8] text-[#131314] font-semibold rounded-lg px-3 py-1.5 hover:bg-[#aecbfa] transition-colors"
+                  >
+                    깃에 반영
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => setShowCore((v) => !v)}
+                className="text-xs text-[#9aa0a6] hover:text-[#e8eaed] transition-colors"
+              >
+                {showCore ? "▾" : "▸"} 공통 코어 (읽기전용, {selectedRelationLabel} 저장 시 수정 안 됨)
+              </button>
+              <div className="flex items-center gap-1 bg-[#131314] rounded-lg p-0.5">
+                {(["edit", "preview", ...(isDirty ? ["diff"] : [])] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                      viewMode === mode ? "bg-[#2d2d2d] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    {mode === "edit" ? "편집" : mode === "preview" ? "미리보기" : "변경 내용"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Editor area */}
+          {/* Core (read-only) */}
+          {showCore && (
+            <div className="max-h-56 overflow-auto border-b border-[#3c3c3c] bg-[#131314] shrink-0">
+              <pre className="text-xs font-mono p-4 text-[#7a7a7a] whitespace-pre-wrap leading-relaxed">
+                {coreContent || "코어가 아직 로드되지 않았습니다. '최신 로드'를 눌러주세요."}
+              </pre>
+            </div>
+          )}
+
+          {/* Editor area — 관계 모듈만 편집 가능, core.md는 위 읽기전용 패널로 분리 */}
           <div className="flex-1 overflow-auto flex flex-col">
             {viewMode === "diff" && isDirty ? (
               <pre className="text-xs font-mono p-4 leading-relaxed flex-1">
@@ -284,14 +333,14 @@ export default function Home() {
                   prose-hr:border-[#3c3c3c] prose-li:text-[#bdc1c6]
                   prose-table:text-[#bdc1c6] prose-th:text-[#e8eaed] prose-th:border-[#3c3c3c] prose-td:border-[#3c3c3c]
                 ">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{systemPrompt || "*프롬프트가 없습니다.*"}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{relationModule || "*관계 모듈이 없습니다.*"}</ReactMarkdown>
                 </div>
               </div>
             ) : (
               <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder="시스템 프롬프트를 입력하거나 '최신 로드'로 GitHub에서 불러오세요."
+                value={relationModule}
+                onChange={(e) => setRelationModule(e.target.value)}
+                placeholder="관계 모듈을 입력하거나 '최신 로드'로 GitHub에서 불러오세요."
                 className="w-full flex-1 p-4 text-sm font-mono text-[#e8eaed] bg-transparent placeholder-[#4a4a4a] resize-none focus:outline-none leading-relaxed"
               />
             )}
@@ -360,7 +409,13 @@ export default function Home() {
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPush && (
-        <PushModal promptContent={systemPrompt} onClose={() => setShowPush(false)} onSuccess={handlePushSuccess} />
+        <PushModal
+          relation={selectedRelation}
+          relationLabel={selectedRelationLabel}
+          promptContent={relationModule}
+          onClose={() => setShowPush(false)}
+          onSuccess={handlePushSuccess}
+        />
       )}
     </div>
   );
