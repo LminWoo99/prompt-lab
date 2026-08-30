@@ -1,10 +1,11 @@
+// experiments/psych-engine/cases/CASE_SCHEMA.md의 기존 네이밍을 따른다.
 export const RELATIONS = [
   { id: "ex", label: "전연인" },
-  { id: "crush", label: "썸" },
+  { id: "some", label: "썸" },
   { id: "lover", label: "연인" },
-  { id: "unrequited", label: "짝사랑" },
+  { id: "crush", label: "짝사랑" },
   { id: "friend", label: "친구" },
-  { id: "workplace", label: "직장" },
+  { id: "work", label: "직장" },
 ] as const;
 
 export type RelationId = (typeof RELATIONS)[number]["id"];
