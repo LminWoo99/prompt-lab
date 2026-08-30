@@ -87,10 +87,16 @@ function SignalCard({ signal }: { signal: SignalItem }) {
   );
 }
 
+// 모델이 ```json ... ``` 코드펜스로 감싸서 응답하는 경우가 있어 파싱 전에 벗겨낸다.
+function stripCodeFence(text: string): string {
+  const match = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  return match ? match[1] : text.trim();
+}
+
 export default function AnalysisResult({ text }: { text: string }) {
   let parsed: AnalysisOutput | null = null;
   try {
-    const candidate = JSON.parse(text);
+    const candidate = JSON.parse(stripCodeFence(text));
     if (candidate && typeof candidate === "object" && "basic" in candidate) parsed = candidate;
   } catch {
     parsed = null;
