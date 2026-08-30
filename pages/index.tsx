@@ -8,6 +8,7 @@ import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import { CaseData, formatCaseAsInput } from "@/lib/cases";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
+import AnalysisResult from "@/components/AnalysisResult";
 
 interface TestResult {
   text: string;
@@ -460,8 +461,8 @@ export default function Home() {
                   <span className="text-[#3c3c3c]">·</span>
                   <span className="text-xs text-[#8ab4f8] font-semibold">${result.cost.toFixed(6)}</span>
                 </div>
-                <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-4 text-sm text-[#e8eaed] whitespace-pre-wrap leading-relaxed">
-                  {result.text}
+                <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-4">
+                  <AnalysisResult text={result.text} />
                 </div>
               </div>
             )}
