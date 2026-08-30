@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { MODELS, calcCost } from "@/lib/models";
 import { storage } from "@/lib/storage";
 import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
+import { CaseData, formatCaseAsInput } from "@/lib/cases";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
 
@@ -61,6 +62,8 @@ export default function Home() {
   const [prUrl, setPrUrl] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [mobileTab, setMobileTab] = useState<"prompt" | "test">("prompt");
+  const [cases, setCases] = useState<CaseData[]>([]);
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -75,6 +78,18 @@ export default function Home() {
   useEffect(() => { storage.setRelationModuleDraft(selectedRelation, relationModule); }, [selectedRelation, relationModule]);
   useEffect(() => { storage.setSelectedModel(selectedModelId); }, [selectedModelId]);
   useEffect(() => { storage.setSelectedRelation(selectedRelation); }, [selectedRelation]);
+
+  useEffect(() => {
+    if (!session) return;
+    setActiveCaseId(null);
+    fetch(`/api/github/cases?relation=${selectedRelation}`)
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error);
+        setCases(data.cases);
+      })
+      .catch(() => setCases([]));
+  }, [session, selectedRelation]);
 
   const isDirty = relationModule !== originalRelationModule && originalRelationModule !== "";
 
@@ -125,6 +140,13 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleLoadCase(c: CaseData) {
+    setActiveCaseId(c.id);
+    setUserMessage(formatCaseAsInput(c, selectedRelationLabel));
+    setResult(null);
+    setMobileTab("test");
   }
 
   function handlePushSuccess(url: string) {
@@ -367,17 +389,57 @@ export default function Home() {
               </select>
             </div>
 
+            {/* 골든 케이스 */}
+            {cases.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-[#9aa0a6]">골든 케이스 ({selectedRelationLabel})</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {cases.map((c, idx) => (
+                    <button
+                      key={c.id}
+                      onClick={() => handleLoadCase(c)}
+                      title={c.situation_memo}
+                      className={`text-xs rounded-lg px-3 py-1.5 border transition-colors ${
+                        activeCaseId === c.id
+                          ? "bg-[#8ab4f8] text-[#131314] border-[#8ab4f8] font-semibold"
+                          : "text-[#9aa0a6] border-[#3c3c3c] hover:text-[#e8eaed] hover:border-[#5c5c5c]"
+                      }`}
+                    >
+                      케이스 {idx + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* User message */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-[#9aa0a6]">유저 메시지</label>
               <textarea
                 value={userMessage}
                 onChange={(e) => setUserMessage(e.target.value)}
-                placeholder="테스트할 메시지를 입력하세요."
+                placeholder="테스트할 메시지를 입력하거나 위 골든 케이스를 눌러 불러오세요."
                 rows={4}
                 className="bg-[#1e1e1e] border border-[#3c3c3c] text-[#e8eaed] placeholder-[#4a4a4a] rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-[#8ab4f8] transition-colors"
               />
             </div>
+
+            {/* 기대 판단 (expected_read) — 활성 케이스가 있을 때만 */}
+            {activeCaseId && (() => {
+              const activeCase = cases.find((c) => c.id === activeCaseId);
+              if (!activeCase) return null;
+              return (
+                <div className="bg-[#1e2a1e] border border-[#2d4a2d] rounded-xl p-3 text-xs text-[#9ecb9e] flex flex-col gap-1.5">
+                  <span className="font-semibold text-[#81c995]">기대 판단 (expected_read)</span>
+                  {Object.entries(activeCase.expected_read).map(([key, value]) => (
+                    <div key={key}>
+                      <span className="text-[#6a9a6a]">{key}: </span>
+                      <span>{Array.isArray(value) ? value.join(", ") : String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             <button
               onClick={handleTest}
