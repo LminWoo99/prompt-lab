@@ -125,6 +125,36 @@ pm2 save
 
 ---
 
+## 홈서버 업데이트 배포 (코드 수정 후 반영할 때마다)
+
+최초 설치가 아니라 이미 떠 있는 `prompt-lab`에 새 커밋을 반영하는 루틴.
+
+```bash
+# 1. 맥미니 접속
+ssh minu-dev.win
+
+# 2. Ubuntu VM 접속
+orb shell -m homeserver
+# 헷갈리면 uname -a 로 확인: Darwin이면 아직 맥, Linux면 VM 안
+
+# 3. pm2로 떠 있는 위치 확인 (레포 경로를 까먹었을 때)
+pm2 describe prompt-lab   # exec cwd 항목이 실제 경로
+
+# 4. 배포
+cd /opt/prompt-lab
+git pull
+npm install               # package.json 변경 없으면 생략 가능
+npm run build
+pm2 restart prompt-lab
+pm2 status                # online 확인
+```
+
+> `npm run build`는 `package.json`에서 `next build --webpack`으로 고정돼 있다. 이 Next.js 버전의 Turbopack 빌드가 이 VM 환경에서 `synchronize_rcu_expedited` 상태로 멈추는(D state, kill -9도 안 먹음) 문제가 있어서 webpack으로 강제했다. `next dev`도 같은 이유로 `--webpack`.
+
+**빌드가 멈추고 안 죽으면**: `ps aux`로 `D` 상태 프로세스 확인 → `kill -9`도 안 되면 VM 자체를 재시작한다 (`orb stop homeserver` / `orb start homeserver`, 안 꺼지면 OrbStack 앱 자체를 완전히 종료 후 재실행). VM 재시작 후 pm2가 비어있으면 `pm2 start npm --name prompt-lab -- start && pm2 save`로 다시 등록.
+
+---
+
 ## 기술 스택
 
 | 항목 | 내용 |
