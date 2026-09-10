@@ -65,6 +65,7 @@ export default function Home() {
   const [mobileTab, setMobileTab] = useState<"prompt" | "test">("prompt");
   const [cases, setCases] = useState<CaseData[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -105,6 +106,7 @@ export default function Home() {
       setCoreContent(data.core);
       setRelationModule(data.relationModule);
       setOriginalRelationModule(data.relationModule);
+      setLoadedRelation(relation);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "프롬프트 로드 실패");
     } finally {
@@ -116,14 +118,17 @@ export default function Home() {
     setSelectedRelation(relation);
     setOriginalRelationModule("");
     setResult(null);
+    setLoadedRelation(null);
     const draft = storage.getRelationModuleDraft(relation);
     setRelationModule(draft);
     handleLoadPrompt(relation);
   }
 
+  const promptReady = !loadingPrompt && loadedRelation === selectedRelation && !!coreContent;
+
   async function handleTest() {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
-    if (!coreContent) { setError("먼저 '최신 로드'로 프롬프트를 불러와주세요."); return; }
+    if (!promptReady) { setError("먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요."); return; }
     const model = MODELS.find((m) => m.id === selectedModelId)!;
     setLoading(true); setError(""); setResult(null);
     try {
@@ -444,10 +449,11 @@ export default function Home() {
 
             <button
               onClick={handleTest}
-              disabled={loading}
+              disabled={loading || !promptReady}
+              title={!promptReady ? "먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요." : undefined}
               className="bg-[#8ab4f8] text-[#131314] font-semibold rounded-xl py-2.5 text-sm hover:bg-[#aecbfa] disabled:opacity-40 transition-colors"
             >
-              {loading ? "실행 중..." : "테스트 실행"}
+              {loading ? "실행 중..." : !promptReady ? "프롬프트 로드 필요" : "테스트 실행"}
             </button>
 
             {result && (
