@@ -14,7 +14,7 @@ export interface CaseData {
   expected_read: Record<string, unknown>;
 }
 
-export const TIERS = ["basic", "deep", "next_move"] as const;
+export const TIERS = ["basic", "deep"] as const;
 export type Tier = (typeof TIERS)[number];
 
 // core.md의 [관계 유형]/[티어]/[대화 내용] 입력 형식에 맞춰 케이스를 변환한다.
