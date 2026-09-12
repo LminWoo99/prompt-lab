@@ -456,6 +456,13 @@ export default function Home() {
               {loading ? "실행 중..." : !promptReady ? "프롬프트 로드 필요" : "테스트 실행"}
             </button>
 
+            {loading && (
+              <div className="flex items-center justify-center gap-2.5 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-6">
+                <span className="w-4 h-4 border-2 border-[#3c3c3c] border-t-[#8ab4f8] rounded-full animate-spin" />
+                <span className="text-sm text-[#9aa0a6]">AI 응답 생성 중...</span>
+              </div>
+            )}
+
             {result && (
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap gap-3 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-2.5">
