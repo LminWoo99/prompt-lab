@@ -33,7 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const inputTokens = response.usage.input_tokens;
       const outputTokens = response.usage.output_tokens;
-      const text = response.content[0].type === "text" ? response.content[0].text : "";
+      // content에 thinking 블록이 먼저 올 수 있어 첫 번째 text 블록을 찾는다.
+      const textBlock = response.content.find((block) => block.type === "text");
+      const text = textBlock?.type === "text" ? textBlock.text : "";
 
       return res.status(200).json({ text, inputTokens, outputTokens, elapsedMs: Date.now() - startTime });
     }
