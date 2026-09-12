@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import { MODELS, calcCost } from "@/lib/models";
 import { storage } from "@/lib/storage";
 import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
-import { CaseData, formatCaseAsInput } from "@/lib/cases";
+import { CaseData, formatCaseAsInput, Tier, TIERS } from "@/lib/cases";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
 import AnalysisResult from "@/components/AnalysisResult";
@@ -65,6 +65,7 @@ export default function Home() {
   const [mobileTab, setMobileTab] = useState<"prompt" | "test">("prompt");
   const [cases, setCases] = useState<CaseData[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [selectedTier, setSelectedTier] = useState<Tier>("basic");
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
 
   useEffect(() => {
@@ -150,7 +151,7 @@ export default function Home() {
 
   function handleLoadCase(c: CaseData) {
     setActiveCaseId(c.id);
-    setUserMessage(formatCaseAsInput(c, selectedRelationLabel));
+    setUserMessage(formatCaseAsInput(c, selectedRelationLabel, selectedTier));
     setResult(null);
     setMobileTab("test");
   }
@@ -391,6 +392,20 @@ export default function Home() {
               >
                 {MODELS.map((m) => (
                   <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tier selector */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-[#9aa0a6]">티어</label>
+              <select
+                value={selectedTier}
+                onChange={(e) => setSelectedTier(e.target.value as Tier)}
+                className="bg-[#1e1e1e] border border-[#3c3c3c] text-[#e8eaed] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#8ab4f8] transition-colors"
+              >
+                {TIERS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
             </div>
