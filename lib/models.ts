@@ -65,3 +65,12 @@ export function calcCost(
     (outputTokens / 1_000_000) * model.outputPricePerMToken
   );
 }
+
+// 대략적인 비용 감을 주기 위한 가정치. 모델별 실제 토크나이저/이미지 처리 방식과는 차이가 있다.
+export const SAMPLE_TEXT_TOKENS = 500; // 텍스트 1000자 ≈ 500토큰
+export const SAMPLE_IMAGE_TOKENS = 1000; // 카톡 이미지 1장 ≈ 1000토큰
+
+// "텍스트 1000자 + 이미지 1장" 입력을 보냈을 때 드는 대략적인 비용 (출력 비용 제외).
+export function estimateSampleCost(model: Model): number {
+  return calcCost(model, SAMPLE_TEXT_TOKENS + SAMPLE_IMAGE_TOKENS, 0);
+}
