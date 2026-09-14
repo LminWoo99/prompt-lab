@@ -46,15 +46,13 @@ export const MODELS: Model[] = [
     inputPricePerMToken: 0.25,
     outputPricePerMToken: 2.0,
   },
-  // TODO: gemini-3.5-flash-lite는 계정 Prepay 결제 이슈로 API 호출이 막혀있어 임시 비활성화.
-  // 결제 충전 후 아래 주석 해제.
-  // {
-  //   id: "gemini-3.5-flash-lite",
-  //   label: "Gemini 3.5 Flash-Lite",
-  //   provider: "google",
-  //   inputPricePerMToken: 0.1,
-  //   outputPricePerMToken: 0.4,
-  // },
+  {
+    id: "gemini-3.5-flash-lite",
+    label: "Gemini 3.5 Flash-Lite",
+    provider: "google",
+    inputPricePerMToken: 0.1,
+    outputPricePerMToken: 0.4,
+  },
 ];
 
 export function calcCost(
