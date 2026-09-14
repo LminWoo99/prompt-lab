@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { MODELS, calcCost } from "@/lib/models";
+import { MODELS, calcCost, estimateSampleCost } from "@/lib/models";
 import { storage } from "@/lib/storage";
 import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import { CaseData, formatCaseAsInput, Tier, TIERS } from "@/lib/cases";
@@ -66,6 +66,7 @@ export default function Home() {
   const [cases, setCases] = useState<CaseData[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<Tier>("basic");
+  const [showCostTable, setShowCostTable] = useState(false);
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
 
   useEffect(() => {
@@ -394,6 +395,25 @@ export default function Home() {
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
               </select>
+              <button
+                onClick={() => setShowCostTable((v) => !v)}
+                className="self-start text-xs text-[#8ab4f8] hover:text-[#aecbfa] transition-colors"
+              >
+                {showCostTable ? "▾" : "▸"} 대략적인 비용 보기
+              </button>
+              {showCostTable && (
+                <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-3 flex flex-col gap-1.5">
+                  {MODELS.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between text-xs">
+                      <span className="text-[#bdc1c6]">{m.label}</span>
+                      <span className="text-[#8ab4f8] font-medium">${estimateSampleCost(m).toFixed(6)}</span>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-[#5c5c5c] mt-1">
+                    * 텍스트 1000자 ≈ 500토큰, 카톡 이미지 1장 ≈ 1000토큰으로 가정한 입력 비용 대략치예요 (출력 비용 제외, 모델마다 실제 토큰화 방식은 달라요).
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Tier selector */}
