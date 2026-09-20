@@ -67,6 +67,7 @@ export default function Home() {
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [selectedTier, setSelectedTier] = useState<Tier>("basic");
   const [showCostTable, setShowCostTable] = useState(false);
+  const [image, setImage] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
 
   useEffect(() => {
@@ -132,13 +133,19 @@ export default function Home() {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
     if (!promptReady) { setError("먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요."); return; }
     const model = MODELS.find((m) => m.id === selectedModelId)!;
+    if (image && !imageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
     setLoading(true); setError(""); setResult(null);
     try {
       const assembled = assemblePrompt(coreContent, relationModule);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: selectedModelId, systemPrompt: assembled, userMessage }),
+        body: JSON.stringify({
+          modelId: selectedModelId,
+          systemPrompt: assembled,
+          userMessage,
+          ...(image ? { image: { base64: image.base64, mimeType: image.mimeType } } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -163,6 +170,22 @@ export default function Home() {
 
   const selectedRelationLabel = RELATIONS.find((r) => r.id === selectedRelation)?.label ?? selectedRelation;
   const diffLines = viewMode === "diff" && isDirty ? computeLineDiff(originalRelationModule, relationModule) : [];
+  const selectedModel = MODELS.find((m) => m.id === selectedModelId);
+  // 이미지 입력은 Anthropic/OpenAI 모델에서만 지원 (실제 서비스에서도 이 두 provider만 씀).
+  const imageCapable = selectedModel?.provider === "anthropic" || selectedModel?.provider === "openai";
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1] ?? "";
+      setImage({ base64, mimeType: file.type, name: file.name });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   if (status === "loading") {
     return (
@@ -467,6 +490,28 @@ export default function Home() {
                 rows={4}
                 className="bg-[#1e1e1e] border border-[#3c3c3c] text-[#e8eaed] placeholder-[#4a4a4a] rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-[#8ab4f8] transition-colors"
               />
+            </div>
+
+            {/* 이미지 첨부 (카톡 캡처 테스트용, Claude/GPT 계열만 지원) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-[#9aa0a6]">이미지 첨부 (선택, Claude/GPT만 지원)</label>
+              {image ? (
+                <div className="flex items-center gap-2 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-2">
+                  <img src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name} className="w-12 h-12 object-cover rounded-lg" />
+                  <span className="text-xs text-[#9aa0a6] truncate flex-1">{image.name}</span>
+                  <button onClick={() => setImage(null)} className="text-xs text-[#f28b82] hover:text-[#ff9a8d] px-2">제거</button>
+                </div>
+              ) : (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="text-xs text-[#9aa0a6] file:mr-2 file:rounded-lg file:border file:border-[#3c3c3c] file:bg-[#1e1e1e] file:text-[#e8eaed] file:text-xs file:px-3 file:py-1.5 file:cursor-pointer"
+                />
+              )}
+              {image && !imageCapable && (
+                <p className="text-xs text-[#f28b82]">선택한 모델은 이미지를 지원하지 않아요 — Claude 또는 GPT 계열 모델을 선택해주세요.</p>
+              )}
             </div>
 
             {/* 기대 판단 (expected_read) — 활성 케이스가 있을 때만 */}
