@@ -1,3 +1,5 @@
+import type { Tier } from "./cases";
+
 export type ModelProvider = "anthropic" | "google" | "openai" | "deepseek";
 
 export interface Model {
@@ -78,6 +80,12 @@ export function calcCost(
     (outputTokens / 1_000_000) * model.outputPricePerMToken
   );
 }
+
+// 팀 회의에서 정한 티어별 기본 모델 (basic: 저렴, deep: 안정적인 고성능).
+export const TIER_DEFAULT_MODEL_ID: Record<Tier, string> = {
+  basic: "gpt-5-mini",
+  deep: "claude-sonnet-4-6",
+};
 
 // 대략적인 비용 감을 주기 위한 가정치. 모델별 실제 토크나이저/이미지 처리 방식과는 차이가 있다.
 export const SAMPLE_TEXT_TOKENS = 500; // 텍스트 1000자 ≈ 500토큰

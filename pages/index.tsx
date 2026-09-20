@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { MODELS, calcCost, estimateSampleCost } from "@/lib/models";
+import { MODELS, calcCost, estimateSampleCost, TIER_DEFAULT_MODEL_ID } from "@/lib/models";
 import { storage } from "@/lib/storage";
 import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import { CaseData, formatCaseAsInput, Tier, TIERS } from "@/lib/cases";
@@ -53,7 +53,7 @@ export default function Home() {
   const [originalRelationModule, setOriginalRelationModule] = useState("");
   const [showCore, setShowCore] = useState(false);
   const [userMessage, setUserMessage] = useState("");
-  const [selectedModelId, setSelectedModelId] = useState(MODELS[0].id);
+  const [selectedModelId, setSelectedModelId] = useState(TIER_DEFAULT_MODEL_ID.basic);
   const [result, setResult] = useState<TestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
@@ -421,7 +421,11 @@ export default function Home() {
               <label className="text-xs text-[#9aa0a6]">티어</label>
               <select
                 value={selectedTier}
-                onChange={(e) => setSelectedTier(e.target.value as Tier)}
+                onChange={(e) => {
+                  const tier = e.target.value as Tier;
+                  setSelectedTier(tier);
+                  setSelectedModelId(TIER_DEFAULT_MODEL_ID[tier]);
+                }}
                 className="bg-[#1e1e1e] border border-[#3c3c3c] text-[#e8eaed] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#8ab4f8] transition-colors"
               >
                 {TIERS.map((t) => (
