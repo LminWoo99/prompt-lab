@@ -30,11 +30,27 @@ interface LightNextMove {
   send_timing: string;
 }
 
+interface SignalDetail {
+  signal_id: string;
+  strength: string;
+  confidence: string;
+  evidence_count: number;
+  raw_evidence: string[];
+  allowed_interpretation: string;
+  forbidden_check?: string;
+}
+
 interface AnalysisDeep {
+  signal_detail?: SignalDetail[];
   framework_detail?: FrameworkDetail;
   light_next_move?: LightNextMove;
   my_contribution?: string | null;
   risk_signals?: Array<Record<string, unknown>>;
+}
+
+interface FunComment {
+  label: string;
+  content: string;
 }
 
 interface RecommendedReply {
@@ -57,6 +73,7 @@ interface AnalysisOutput {
   deep: AnalysisDeep | null;
   next_move: AnalysisNextMove | null;
   disclaimer: string;
+  fun_comment?: FunComment;
 }
 
 function formatValue(value: unknown): string {
@@ -87,9 +104,30 @@ function SignalCard({ signal }: { signal: SignalItem }) {
   );
 }
 
-// 모델이 ```json ... ``` 코드펜스로 감싸서 응답하는 경우가 있어 파싱 전에 벗겨낸다.
+function SignalDetailCard({ detail }: { detail: SignalDetail }) {
+  return (
+    <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs font-mono text-[#8ab4f8]">{detail.signal_id}</span>
+        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">강도 {detail.strength}</span>
+        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">신뢰도 {detail.confidence}</span>
+        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">근거 {detail.evidence_count}개</span>
+      </div>
+      {detail.raw_evidence?.length > 0 && (
+        <ul className="text-sm text-[#bdc1c6] list-disc list-inside">
+          {detail.raw_evidence.map((e, i) => <li key={i}>&ldquo;{e}&rdquo;</li>)}
+        </ul>
+      )}
+      <p className="text-sm text-[#e8eaed]">→ {detail.allowed_interpretation}</p>
+      {detail.forbidden_check && <p className="text-xs text-[#7a8a9a]">⚠ 단정 금지: {detail.forbidden_check}</p>}
+    </div>
+  );
+}
+
+// 모델이 ```json ... ``` 코드펜스로 감싸서 응답하거나, 그 뒤에 코드펜스 밖 설명을
+// 덧붙이는 경우가 있어(스키마 미준수) 앞뒤에 뭐가 더 붙어 있어도 첫 번째 코드펜스 블록만 뽑아낸다.
 function stripCodeFence(text: string): string {
-  const match = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  const match = text.trim().match(/```(?:json)?\s*([\s\S]*?)```/);
   return match ? match[1] : text.trim();
 }
 
@@ -107,7 +145,7 @@ export default function AnalysisResult({ text }: { text: string }) {
     return <div className="text-sm text-[#e8eaed] whitespace-pre-wrap leading-relaxed">{text}</div>;
   }
 
-  const { basic, deep, next_move, relation_type, tier, disclaimer } = parsed;
+  const { basic, deep, next_move, relation_type, tier, disclaimer, fun_comment } = parsed;
 
   return (
     <div className="flex flex-col gap-3">
@@ -148,6 +186,12 @@ export default function AnalysisResult({ text }: { text: string }) {
       {deep && (
         <div className="flex flex-col gap-2 border-t border-[#3c3c3c] pt-3">
           <span className="text-xs text-[#9aa0a6]">deep</span>
+          {deep.signal_detail && deep.signal_detail.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-[#9aa0a6]">근거 상세 (signal_detail)</span>
+              {deep.signal_detail.map((d, i) => <SignalDetailCard key={i} detail={d} />)}
+            </div>
+          )}
           {deep.framework_detail && (
             <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 text-sm text-[#bdc1c6]">
               <p><span className="text-[#8ab4f8]">{deep.framework_detail.primary}</span>: {deep.framework_detail.primary_result}</p>
@@ -193,6 +237,13 @@ export default function AnalysisResult({ text }: { text: string }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {fun_comment && (
+        <div className="bg-[#2a1e3a] border border-[#4a2d6a] rounded-lg p-3 flex flex-col gap-1">
+          <span className="text-xs text-[#c9a8f0]">🔮 {fun_comment.label}</span>
+          <p className="text-sm text-[#e8eaed]">{fun_comment.content}</p>
         </div>
       )}
 
