@@ -26,7 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const client = new Anthropic({ apiKey });
       const response = await client.messages.create({
         model: modelId,
-        max_tokens: 4096,
+        // deep 티어는 thinking + JSON 출력이 4096을 넘는 경우가 있어 여유 있게 잡는다.
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       });
