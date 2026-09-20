@@ -1,11 +1,10 @@
 // experiments/psych-engine/cases/CASE_SCHEMA.md의 기존 네이밍을 따른다.
+// 친구/직장은 팀 회의에서 MVP 범위 제외로 결정되어 뺐다.
 export const RELATIONS = [
   { id: "ex", label: "전연인" },
   { id: "some", label: "썸" },
   { id: "lover", label: "연인" },
   { id: "crush", label: "짝사랑" },
-  { id: "friend", label: "친구" },
-  { id: "work", label: "직장" },
 ] as const;
 
 export type RelationId = (typeof RELATIONS)[number]["id"];
