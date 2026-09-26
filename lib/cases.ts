@@ -17,8 +17,8 @@ export interface CaseData {
 export const TIERS = ["basic", "deep"] as const;
 export type Tier = (typeof TIERS)[number];
 
-// core.md의 [관계 유형]/[티어]/[대화 내용] 입력 형식에 맞춰 케이스를 변환한다.
-export function formatCaseAsInput(caseData: CaseData, relationLabel: string, tier: Tier = "basic"): string {
-  const conversation = caseData.messages.map((m) => `${m.speaker}: ${m.text}`).join("\n");
-  return `[관계 유형] ${relationLabel}\n[티어] ${tier}\n[대화 내용]\n${conversation}`;
+// 대화 내용만 추출한다. [관계 유형]/[티어]는 요청 시점에 현재 선택값으로 붙인다
+// (텍스트에 박아두면 드롭다운을 나중에 바꿔도 안 따라가는 문제가 있었음).
+export function formatCaseAsInput(caseData: CaseData): string {
+  return caseData.messages.map((m) => `${m.speaker}: ${m.text}`).join("\n");
 }
