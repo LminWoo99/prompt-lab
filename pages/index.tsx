@@ -69,6 +69,7 @@ export default function Home() {
   const [showCostTable, setShowCostTable] = useState(false);
   const [image, setImage] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
+  const [lastTestedTier, setLastTestedTier] = useState<Tier | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -121,6 +122,7 @@ export default function Home() {
     setSelectedRelation(relation);
     setOriginalRelationModule("");
     setResult(null);
+    setLastTestedTier(null);
     setLoadedRelation(null);
     const draft = storage.getRelationModuleDraft(relation);
     setRelationModule(draft);
@@ -129,27 +131,36 @@ export default function Home() {
 
   const promptReady = !loadingPrompt && loadedRelation === selectedRelation && !!coreContent;
 
-  async function handleTest() {
+  // overrideTier/overrideModelId: "정밀 분석 하시겠습니까?" 버튼처럼 드롭다운과
+  // 무관하게 특정 티어/모델로 강제 실행할 때 씀. 안 넘기면 현재 드롭다운 값 그대로 사용.
+  async function handleTest(overrideTier?: Tier, overrideModelId?: string) {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
     if (!promptReady) { setError("먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요."); return; }
-    const model = MODELS.find((m) => m.id === selectedModelId)!;
-    if (image && !imageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
+    const tier = overrideTier ?? selectedTier;
+    const modelId = overrideModelId ?? selectedModelId;
+    const model = MODELS.find((m) => m.id === modelId)!;
+    const modelImageCapable = model.provider === "anthropic" || model.provider === "openai";
+    if (image && !modelImageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
     setLoading(true); setError(""); setResult(null);
     try {
       const assembled = assemblePrompt(coreContent, relationModule);
+      // [관계 유형]/[티어]는 항상 현재 값 기준으로 여기서 새로 조립한다 — 입력창에
+      // 박아두면 드롭다운을 나중에 바꿔도 안 따라가는 문제가 있었음.
+      const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n[대화 내용]\n${userMessage}`;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          modelId: selectedModelId,
+          modelId,
           systemPrompt: assembled,
-          userMessage,
+          userMessage: wrappedMessage,
           ...(image ? { image: { base64: image.base64, mimeType: image.mimeType } } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult({ ...data, cost: calcCost(model, data.inputTokens, data.outputTokens) });
+      setLastTestedTier(tier);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "테스트 실패");
     } finally {
@@ -157,10 +168,17 @@ export default function Home() {
     }
   }
 
+  function handlePrecisionAnalysis() {
+    setSelectedTier("deep");
+    setSelectedModelId(TIER_DEFAULT_MODEL_ID.deep);
+    handleTest("deep", TIER_DEFAULT_MODEL_ID.deep);
+  }
+
   function handleLoadCase(c: CaseData) {
     setActiveCaseId(c.id);
-    setUserMessage(formatCaseAsInput(c, selectedRelationLabel, selectedTier));
+    setUserMessage(formatCaseAsInput(c));
     setResult(null);
+    setLastTestedTier(null);
     setMobileTab("test");
   }
 
@@ -486,7 +504,7 @@ export default function Home() {
               <textarea
                 value={userMessage}
                 onChange={(e) => setUserMessage(e.target.value)}
-                placeholder="테스트할 메시지를 입력하거나 위 골든 케이스를 눌러 불러오세요."
+                placeholder="대화 내용만 입력하세요 (관계 유형·티어는 위 드롭다운 값이 자동으로 붙어요) — 또는 위 골든 케이스를 눌러 불러오세요."
                 rows={4}
                 className="bg-[#1e1e1e] border border-[#3c3c3c] text-[#e8eaed] placeholder-[#4a4a4a] rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-[#8ab4f8] transition-colors"
               />
@@ -532,7 +550,7 @@ export default function Home() {
             })()}
 
             <button
-              onClick={handleTest}
+              onClick={() => handleTest()}
               disabled={loading || !promptReady}
               title={!promptReady ? "먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요." : undefined}
               className="bg-[#8ab4f8] text-[#131314] font-semibold rounded-xl py-2.5 text-sm hover:bg-[#aecbfa] disabled:opacity-40 transition-colors"
@@ -561,6 +579,15 @@ export default function Home() {
                 <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-4">
                   <AnalysisResult text={result.text} />
                 </div>
+                {lastTestedTier === "basic" && (
+                  <button
+                    onClick={handlePrecisionAnalysis}
+                    disabled={loading}
+                    className="bg-[#2a1e3a] border border-[#4a2d6a] text-[#c9a8f0] font-semibold rounded-xl py-2.5 text-sm hover:bg-[#33244a] disabled:opacity-40 transition-colors"
+                  >
+                    🔒 정밀 분석 하시겠습니까? (Sonnet 4.6)
+                  </button>
+                )}
               </div>
             )}
           </div>
