@@ -2,6 +2,7 @@ const KEYS = {
   RELATION_MODULE_DRAFT_PREFIX: "relation_module_draft:",
   SELECTED_MODEL: "selected_model",
   SELECTED_RELATION: "selected_relation",
+  SELECTED_TIER: "selected_tier",
 } as const;
 
 function get(key: string): string {
@@ -24,4 +25,7 @@ export const storage = {
 
   getSelectedRelation: () => get(KEYS.SELECTED_RELATION),
   setSelectedRelation: (v: string) => set(KEYS.SELECTED_RELATION, v),
+
+  getSelectedTier: () => get(KEYS.SELECTED_TIER),
+  setSelectedTier: (v: string) => set(KEYS.SELECTED_TIER, v),
 };
