@@ -78,14 +78,14 @@ export default function Home() {
     const draft = storage.getRelationModuleDraft(initialRelation);
     if (draft) setRelationModule(draft);
     const savedTier = storage.getSelectedTier();
-    if ((TIERS as readonly string[]).includes(savedTier)) setSelectedTier(savedTier as Tier);
-    // 모델은 티어와 함께 저장된 값이어야 어긋나지 않으므로, 티어 복원 이후에 반영한다.
-    const savedModel = storage.getSelectedModel();
-    if (savedModel && MODELS.find((m) => m.id === savedModel)) setSelectedModelId(savedModel);
+    const initialTier = (TIERS as readonly string[]).includes(savedTier) ? (savedTier as Tier) : "basic";
+    setSelectedTier(initialTier);
+    // 모델은 독립적으로 기억하지 않고 항상 복원된 티어의 기본 모델을 따른다
+    // (모델만 따로 저장/복원하면 이전 세션 티어와 어긋나는 문제가 있었음).
+    setSelectedModelId(TIER_DEFAULT_MODEL_ID[initialTier]);
   }, []);
 
   useEffect(() => { storage.setRelationModuleDraft(selectedRelation, relationModule); }, [selectedRelation, relationModule]);
-  useEffect(() => { storage.setSelectedModel(selectedModelId); }, [selectedModelId]);
   useEffect(() => { storage.setSelectedRelation(selectedRelation); }, [selectedRelation]);
   useEffect(() => { storage.setSelectedTier(selectedTier); }, [selectedTier]);
 
