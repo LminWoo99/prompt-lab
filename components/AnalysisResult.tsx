@@ -87,9 +87,10 @@ function SignalCard({ signal }: { signal: SignalItem }) {
   );
 }
 
-// 모델이 ```json ... ``` 코드펜스로 감싸서 응답하는 경우가 있어 파싱 전에 벗겨낸다.
+// 모델이 ```json ... ``` 코드펜스로 감싸서 응답하거나, 그 뒤에 코드펜스 밖 설명을
+// 덧붙이는 경우가 있어(스키마 미준수) 앞뒤에 뭐가 더 붙어 있어도 첫 번째 코드펜스 블록만 뽑아낸다.
 function stripCodeFence(text: string): string {
-  const match = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  const match = text.trim().match(/```(?:json)?\s*([\s\S]*?)```/);
   return match ? match[1] : text.trim();
 }
 
