@@ -7,14 +7,19 @@ import { MODELS } from "@/lib/models";
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { modelId, systemPrompt, userMessage } = req.body as {
+  const { modelId, systemPrompt, userMessage, image } = req.body as {
     modelId: string;
     systemPrompt: string;
     userMessage: string;
+    image?: { base64: string; mimeType: string };
   };
 
   const model = MODELS.find((m) => m.id === modelId);
   if (!model) return res.status(400).json({ error: "지원하지 않는 모델입니다." });
+
+  if (image && model.provider !== "anthropic" && model.provider !== "openai") {
+    return res.status(400).json({ error: "이 모델은 이미지 입력을 지원하지 않습니다." });
+  }
 
   const startTime = Date.now();
 
@@ -24,12 +29,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!apiKey) return res.status(500).json({ error: "서버에 Anthropic API 키가 설정되지 않았습니다." });
 
       const client = new Anthropic({ apiKey });
+      const content: Anthropic.ContentBlockParam[] = [];
+      if (image) {
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: image.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: image.base64 },
+        });
+      }
+      content.push({ type: "text", text: userMessage });
+
       const response = await client.messages.create({
         model: modelId,
         // deep 티어는 thinking + JSON 출력이 4096을 넘는 경우가 있어 여유 있게 잡는다.
         max_tokens: 8192,
         system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
+        messages: [{ role: "user", content }],
       });
 
       const inputTokens = response.usage.input_tokens;
@@ -65,11 +79,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!apiKey) return res.status(500).json({ error: "서버에 OpenAI API 키가 설정되지 않았습니다." });
 
       const client = new OpenAI({ apiKey });
+      const userContent: OpenAI.Chat.ChatCompletionContentPart[] = [{ type: "text", text: userMessage }];
+      if (image) {
+        userContent.unshift({ type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.base64}` } });
+      }
+
       const response = await client.chat.completions.create({
         model: modelId,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
+          { role: "user", content: userContent },
         ],
       });
 
