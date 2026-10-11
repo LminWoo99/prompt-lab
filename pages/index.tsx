@@ -20,6 +20,30 @@ interface BasicBaseline {
   imageBase64: string | null;
 }
 
+// 프롬프트가 사용자 본인(화자)을 확정하지 못해 되묻는 응답. 선택지는 대화 원문에 나온 표기 그대로다.
+interface Clarification {
+  question: string;
+  options: string[];
+}
+
+function parseClarification(text: string): Clarification | null {
+  try {
+    const c = JSON.parse(stripCodeFence(text))?.clarification;
+    if (!c?.needed || typeof c.question !== "string" || !Array.isArray(c.options) || c.options.length === 0) return null;
+    return { question: c.question, options: c.options.map(String) };
+  } catch {
+    return null;
+  }
+}
+
+// 사용자가 고른 화자. 입력이 같은 동안만 유효하다 (Basic/Deep 모두 같은 입력이어야 하므로).
+interface SpeakerAnswer {
+  value: string;
+  relation: RelationId;
+  userMessage: string;
+  imageBase64: string | null;
+}
+
 interface TestResult {
   text: string;
   inputTokens: number;
@@ -81,6 +105,7 @@ export default function Home() {
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
   const [lastTestedTier, setLastTestedTier] = useState<Tier | null>(null);
   const [baseline, setBaseline] = useState<BasicBaseline | null>(null);
+  const [speaker, setSpeaker] = useState<SpeakerAnswer | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -164,9 +189,18 @@ export default function Home() {
     }
   }
 
+  function isSameInput(snapshot: { relation: RelationId; userMessage: string; imageBase64: string | null }): boolean {
+    return (
+      snapshot.relation === selectedRelation &&
+      snapshot.userMessage === userMessage &&
+      snapshot.imageBase64 === (image?.base64 ?? null)
+    );
+  }
+
   // overrideTier/overrideModelId:"정밀 분석 하시겠습니까?" 버튼처럼 드롭다운과
   // 무관하게 특정 티어/모델로 강제 실행할 때 씀. 안 넘기면 현재 드롭다운 값 그대로 사용.
-  async function handleTest(overrideTier?: Tier, overrideModelId?: string) {
+  // answeredSpeaker: 되묻기 버튼으로 고른 화자. 넘기면 저장하고 이번 호출부터 입력에 포함한다.
+  async function handleTest(overrideTier?: Tier, overrideModelId?: string, answeredSpeaker?: string) {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
     if (!promptReady) { setError("먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요."); return; }
     const tier = overrideTier ?? selectedTier;
@@ -176,11 +210,11 @@ export default function Home() {
     if (image && !modelImageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
     if (tier === "deep") {
       if (!baseline) { setError("Deep은 Basic 결과가 필요합니다. 먼저 Basic으로 테스트해주세요."); return; }
-      const inputChanged =
-        baseline.relation !== selectedRelation ||
-        baseline.userMessage !== userMessage ||
-        baseline.imageBase64 !== (image?.base64 ?? null);
-      if (inputChanged) { setError("Basic 실행 이후 입력이 바뀌었습니다. Basic을 다시 테스트해주세요."); return; }
+      if (!isSameInput(baseline)) { setError("Basic 실행 이후 입력이 바뀌었습니다. Basic을 다시 테스트해주세요."); return; }
+    }
+    const speakerValue = answeredSpeaker ?? (speaker && isSameInput(speaker) ? speaker.value : null);
+    if (answeredSpeaker) {
+      setSpeaker({ value: answeredSpeaker, relation: selectedRelation, userMessage, imageBase64: image?.base64 ?? null });
     }
     setLoading(true); setError(""); setResult(null);
     try {
@@ -190,7 +224,8 @@ export default function Home() {
       const baselineBlock = tier === "deep" && baseline
         ? `[Basic 분석 ID] ${baseline.analysisId}\n[Basic 분석 기준점] ${JSON.stringify(baseline.basic)}\n`
         : "";
-      const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n${baselineBlock}[대화 내용]\n${userMessage}`;
+      const speakerBlock = speakerValue ? `[사용자 화자] ${speakerValue}\n` : "";
+      const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n${speakerBlock}${baselineBlock}[대화 내용]\n${userMessage}`;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,6 +247,8 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  const clarification = result ? parseClarification(result.text) : null;
 
   function handlePrecisionAnalysis() {
     setSelectedTier("deep");
@@ -624,7 +661,24 @@ export default function Home() {
                 <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-4">
                   <AnalysisResult text={result.text} />
                 </div>
-                {lastTestedTier === "basic" && (
+                {lastTestedTier === "basic" && clarification && (
+                  <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl p-4 flex flex-col gap-2.5">
+                    <p className="text-sm text-[#e8eaed]">{clarification.question}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {clarification.options.map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => handleTest("basic", selectedTier === "basic" ? selectedModelId : TIER_DEFAULT_MODEL_ID.basic, opt)}
+                          disabled={loading}
+                          className="bg-[#1f2a3d] border border-[#8ab4f8] text-[#8ab4f8] font-semibold rounded-xl px-4 py-2 text-sm hover:bg-[#263650] disabled:opacity-40 transition-colors"
+                        >
+                          나는 {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {lastTestedTier === "basic" && !clarification && (
                   <button
                     onClick={handlePrecisionAnalysis}
                     disabled={loading}
