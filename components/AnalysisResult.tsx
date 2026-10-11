@@ -1,127 +1,14 @@
-import { Fragment } from "react";
+import { useState } from "react";
 
-interface SignalItem {
-  label: string;
-  observation: string;
-  interpretation: string | null;
+type Json = unknown;
+type JsonObject = Record<string, Json>;
+
+function isObject(value: Json): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-interface AnalysisBasic {
-  headline: string;
-  key_signal: SignalItem;
-  supporting_signals: SignalItem[];
-  relation_readout: Record<string, unknown> | null;
-  overall_assessment: string;
-  teaser_hidden_intent?: string;
-  teaser_next_move?: string;
-}
-
-interface FrameworkDetail {
-  primary: string;
-  primary_result: string;
-  secondary?: string;
-  secondary_result?: string;
-}
-
-interface LightNextMove {
-  direction: string;
-  direction_reason: string;
-  avoid_message: string;
-  send_timing: string;
-}
-
-interface SignalDetail {
-  signal_id: string;
-  strength: string;
-  confidence: string;
-  evidence_count: number;
-  raw_evidence: string[];
-  allowed_interpretation: string;
-  forbidden_check?: string;
-}
-
-interface AnalysisDeep {
-  signal_detail?: SignalDetail[];
-  framework_detail?: FrameworkDetail;
-  light_next_move?: LightNextMove;
-  my_contribution?: string | null;
-  risk_signals?: Array<Record<string, unknown>>;
-}
-
-interface FunComment {
-  label: string;
-  content: string;
-}
-
-interface RecommendedReply {
-  style: string;
-  message: string;
-}
-
-interface AnalysisNextMove {
-  situation_read?: string;
-  recommended_replies?: RecommendedReply[];
-  event_strategy?: string;
-  expected_response?: string;
-  messages_to_avoid?: string[];
-}
-
-interface AnalysisOutput {
-  tier: string;
-  relation_type: string;
-  basic: AnalysisBasic;
-  deep: AnalysisDeep | null;
-  next_move: AnalysisNextMove | null;
-  disclaimer: string;
-  fun_comment?: FunComment;
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  return Array.isArray(value) ? value.join(", ") : String(value);
-}
-
-function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
-  return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-      {Object.entries(data).map(([key, value]) => (
-        <Fragment key={key}>
-          <span className="text-[#7a8a9a]">{key}</span>
-          <span className="text-[#e8eaed]">{formatValue(value)}</span>
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-function SignalCard({ signal }: { signal: SignalItem }) {
-  return (
-    <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 flex flex-col gap-1">
-      <span className="text-xs font-mono text-[#8ab4f8]">{signal.label}</span>
-      <p className="text-sm text-[#bdc1c6]">{signal.observation}</p>
-      {signal.interpretation && <p className="text-sm text-[#e8eaed]">→ {signal.interpretation}</p>}
-    </div>
-  );
-}
-
-function SignalDetailCard({ detail }: { detail: SignalDetail }) {
-  return (
-    <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-xs font-mono text-[#8ab4f8]">{detail.signal_id}</span>
-        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">강도 {detail.strength}</span>
-        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">신뢰도 {detail.confidence}</span>
-        <span className="text-[10px] bg-[#2d2d2d] text-[#9aa0a6] px-1.5 py-0.5 rounded-full">근거 {detail.evidence_count}개</span>
-      </div>
-      {detail.raw_evidence?.length > 0 && (
-        <ul className="text-sm text-[#bdc1c6] list-disc list-inside">
-          {detail.raw_evidence.map((e, i) => <li key={i}>&ldquo;{e}&rdquo;</li>)}
-        </ul>
-      )}
-      <p className="text-sm text-[#e8eaed]">→ {detail.allowed_interpretation}</p>
-      {detail.forbidden_check && <p className="text-xs text-[#7a8a9a]">⚠ 단정 금지: {detail.forbidden_check}</p>}
-    </div>
-  );
+function isPrimitive(value: Json): boolean {
+  return value === null || typeof value !== "object";
 }
 
 // 모델이 ```json ... ``` 코드펜스로 감싸서 응답하거나, 그 뒤에 코드펜스 밖 설명을
@@ -131,123 +18,124 @@ function stripCodeFence(text: string): string {
   return match ? match[1] : text.trim();
 }
 
+function Primitive({ value }: { value: Json }) {
+  if (value === null || value === undefined) return <span className="text-[#5c5c5c]">—</span>;
+  return <span className="whitespace-pre-wrap break-words">{String(value)}</span>;
+}
+
+// 값의 타입에 따라 표/리스트/텍스트로 재귀 렌더링한다. 필드 이름을 가정하지 않는다.
+function Value({ value }: { value: Json }) {
+  if (isPrimitive(value)) return <Primitive value={value} />;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-[#5c5c5c]">—</span>;
+    if (value.every(isPrimitive)) {
+      return (
+        <ul className="list-disc list-inside">
+          {value.map((v, i) => (
+            <li key={i}><Primitive value={v} /></li>
+          ))}
+        </ul>
+      );
+    }
+    if (value.every(isObject)) return <ObjectArrayTable rows={value as JsonObject[]} />;
+    return (
+      <div className="flex flex-col gap-1">
+        {value.map((v, i) => (
+          <Value key={i} value={v} />
+        ))}
+      </div>
+    );
+  }
+
+  return <KeyValueTable data={value as JsonObject} />;
+}
+
+function KeyValueTable({ data }: { data: JsonObject }) {
+  const entries = Object.entries(data);
+  if (entries.length === 0) return <span className="text-[#5c5c5c]">—</span>;
+  return (
+    <table className="w-full text-sm border-collapse">
+      <tbody>
+        {entries.map(([key, value]) => (
+          <tr key={key} className="border border-[#3c3c3c] align-top">
+            <th className="text-left font-mono text-xs text-[#8ab4f8] bg-[#1a1a1a] px-2 py-1.5 w-40 whitespace-nowrap">{key}</th>
+            <td className="text-[#e8eaed] px-2 py-1.5"><Value value={value} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ObjectArrayTable({ rows }: { rows: JsonObject[] }) {
+  // 행마다 키가 달라도 모든 키를 컬럼으로 노출한다.
+  const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c} className="text-left font-mono text-xs text-[#8ab4f8] bg-[#1a1a1a] border border-[#3c3c3c] px-2 py-1.5">{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="align-top">
+              {columns.map((c) => (
+                <td key={c} className="text-[#e8eaed] border border-[#3c3c3c] px-2 py-1.5">
+                  <Value value={row[c] as Json} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function AnalysisResult({ text }: { text: string }) {
-  let parsed: AnalysisOutput | null = null;
+  const [showRaw, setShowRaw] = useState(false);
+
+  let parsed: Json = null;
   try {
-    const candidate = JSON.parse(stripCodeFence(text));
-    if (candidate && typeof candidate === "object" && "basic" in candidate) parsed = candidate;
+    parsed = JSON.parse(stripCodeFence(text));
   } catch {
     parsed = null;
   }
 
   // 위기 감지 응답이나 JSON이 아닌 출력은 원문 그대로 보여준다.
-  if (!parsed) {
+  if (!isObject(parsed)) {
     return <div className="text-sm text-[#e8eaed] whitespace-pre-wrap leading-relaxed">{text}</div>;
   }
 
-  const { basic, deep, next_move, relation_type, tier, disclaimer, fun_comment } = parsed;
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="text-xs bg-[#2d2d2d] text-[#9aa0a6] px-2 py-0.5 rounded-full">{relation_type}</span>
-        <span className="text-xs bg-[#2d2d2d] text-[#9aa0a6] px-2 py-0.5 rounded-full">{tier}</span>
+      {Object.entries(parsed).map(([key, value]) => (
+        <section key={key} className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-[#9aa0a6]">{key}</span>
+          <div className="text-sm text-[#e8eaed]">
+            <Value value={value} />
+          </div>
+        </section>
+      ))}
+
+      <div className="border-t border-[#3c3c3c] pt-2">
+        <button
+          onClick={() => setShowRaw((v) => !v)}
+          className="text-xs text-[#9aa0a6] hover:text-[#e8eaed] transition-colors"
+        >
+          {showRaw ? "Raw JSON 숨기기" : "Raw JSON 보기"}
+        </button>
+        {showRaw && (
+          <pre className="mt-2 text-xs text-[#bdc1c6] bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 overflow-x-auto">
+            {JSON.stringify(parsed, null, 2)}
+          </pre>
+        )}
       </div>
-
-      <h3 className="text-base font-semibold text-[#e8eaed]">{basic.headline}</h3>
-
-      <SignalCard signal={basic.key_signal} />
-
-      {basic.supporting_signals?.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-[#9aa0a6]">보조 시그널</span>
-          {basic.supporting_signals.map((s, i) => (
-            <SignalCard key={i} signal={s} />
-          ))}
-        </div>
-      )}
-
-      {basic.relation_readout && (
-        <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3">
-          <span className="text-xs text-[#9aa0a6] block mb-1.5">relation_readout</span>
-          <KeyValueGrid data={basic.relation_readout} />
-        </div>
-      )}
-
-      <p className="text-sm text-[#bdc1c6] leading-relaxed">{basic.overall_assessment}</p>
-
-      {(basic.teaser_hidden_intent || basic.teaser_next_move) && (
-        <div className="bg-[#2a1e3a] border border-[#4a2d6a] rounded-lg p-3 flex flex-col gap-1.5">
-          {basic.teaser_hidden_intent && <p className="text-sm text-[#c9a8f0]">🔒 {basic.teaser_hidden_intent}</p>}
-          {basic.teaser_next_move && <p className="text-sm text-[#c9a8f0]">🔒 {basic.teaser_next_move}</p>}
-        </div>
-      )}
-
-      {deep && (
-        <div className="flex flex-col gap-2 border-t border-[#3c3c3c] pt-3">
-          <span className="text-xs text-[#9aa0a6]">deep</span>
-          {deep.signal_detail && deep.signal_detail.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <span className="text-xs text-[#9aa0a6]">근거 상세 (signal_detail)</span>
-              {deep.signal_detail.map((d, i) => <SignalDetailCard key={i} detail={d} />)}
-            </div>
-          )}
-          {deep.framework_detail && (
-            <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 text-sm text-[#bdc1c6]">
-              <p><span className="text-[#8ab4f8]">{deep.framework_detail.primary}</span>: {deep.framework_detail.primary_result}</p>
-              {deep.framework_detail.secondary && (
-                <p className="mt-1"><span className="text-[#8ab4f8]">{deep.framework_detail.secondary}</span>: {deep.framework_detail.secondary_result}</p>
-              )}
-            </div>
-          )}
-          {deep.light_next_move && (
-            <div className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 text-sm text-[#bdc1c6] flex flex-col gap-1">
-              <span className="text-[#e8eaed] font-medium">{deep.light_next_move.direction} · {deep.light_next_move.send_timing}</span>
-              <p>{deep.light_next_move.direction_reason}</p>
-              <p className="text-[#f28b82]">피해야 할 말: {deep.light_next_move.avoid_message}</p>
-            </div>
-          )}
-          {deep.my_contribution && <p className="text-sm text-[#bdc1c6]">{deep.my_contribution}</p>}
-          {deep.risk_signals && deep.risk_signals.length > 0 && (
-            <div className="bg-[#3a1a1a] border border-[#6a2a2a] rounded-lg p-3 text-sm text-[#f28b82] flex flex-col gap-1">
-              {deep.risk_signals.map((r, i) => (
-                <span key={i}>{formatValue(r.type)} — {formatValue(r.basis)}</span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {next_move && (
-        <div className="flex flex-col gap-2 border-t border-[#3c3c3c] pt-3">
-          <span className="text-xs text-[#9aa0a6]">next_move</span>
-          {next_move.situation_read && <p className="text-sm text-[#bdc1c6]">{next_move.situation_read}</p>}
-          {next_move.recommended_replies?.map((r, i) => (
-            <div key={i} className="bg-[#1a1a1a] border border-[#3c3c3c] rounded-lg p-3 text-sm">
-              <span className="text-[#8ab4f8] text-xs block mb-1">{r.style}</span>
-              <p className="text-[#e8eaed]">{r.message}</p>
-            </div>
-          ))}
-          {next_move.event_strategy && <p className="text-sm text-[#bdc1c6]">{next_move.event_strategy}</p>}
-          {next_move.expected_response && <p className="text-sm text-[#bdc1c6]">예상 반응: {next_move.expected_response}</p>}
-          {next_move.messages_to_avoid && next_move.messages_to_avoid.length > 0 && (
-            <div className="text-sm text-[#f28b82] flex flex-col gap-1">
-              {next_move.messages_to_avoid.map((m, i) => (
-                <p key={i}>피해야 할 말: {m}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {fun_comment && (
-        <div className="bg-[#2a1e3a] border border-[#4a2d6a] rounded-lg p-3 flex flex-col gap-1">
-          <span className="text-xs text-[#c9a8f0]">🔮 {fun_comment.label}</span>
-          <p className="text-sm text-[#e8eaed]">{fun_comment.content}</p>
-        </div>
-      )}
-
-      <p className="text-xs text-[#5c5c5c] italic">{disclaimer}</p>
     </div>
   );
 }
