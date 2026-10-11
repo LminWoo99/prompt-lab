@@ -8,7 +8,17 @@ import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import { CaseData, formatCaseAsInput, Tier, TIERS } from "@/lib/cases";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
-import AnalysisResult from "@/components/AnalysisResult";
+import AnalysisResult, { stripCodeFence } from "@/components/AnalysisResult";
+
+// Deep 호출에 필요한 Basic 기준점. Deep은 "Basic과 동일한 원문"을 요구하므로
+// Basic 실행 당시의 입력을 함께 보관해 두었다가 Deep 호출 시 비교한다.
+interface BasicBaseline {
+  analysisId: string;
+  basic: unknown;
+  relation: RelationId;
+  userMessage: string;
+  imageBase64: string | null;
+}
 
 interface TestResult {
   text: string;
@@ -70,6 +80,7 @@ export default function Home() {
   const [image, setImage] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
   const [loadedRelation, setLoadedRelation] = useState<RelationId | null>(null);
   const [lastTestedTier, setLastTestedTier] = useState<Tier | null>(null);
+  const [baseline, setBaseline] = useState<BasicBaseline | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -135,7 +146,25 @@ export default function Home() {
 
   const promptReady = !loadingPrompt && loadedRelation === selectedRelation && !!coreContent;
 
-  // overrideTier/overrideModelId: "정밀 분석 하시겠습니까?" 버튼처럼 드롭다운과
+  // 프롬프트상 analysis_id는 백엔드 발급이라 Basic 응답에 없다. 랩에는 백엔드가 없으므로 여기서 임시로 발급한다.
+  // Basic 응답이 JSON이 아니거나 basic 객체가 없으면(위기 감지 등) 기준점을 만들지 않는다.
+  function extractBaseline(text: string): BasicBaseline | null {
+    try {
+      const parsed = JSON.parse(stripCodeFence(text));
+      if (!parsed || typeof parsed.basic !== "object" || parsed.basic === null) return null;
+      return {
+        analysisId: crypto.randomUUID(),
+        basic: parsed.basic,
+        relation: selectedRelation,
+        userMessage,
+        imageBase64: image?.base64 ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // overrideTier/overrideModelId:"정밀 분석 하시겠습니까?" 버튼처럼 드롭다운과
   // 무관하게 특정 티어/모델로 강제 실행할 때 씀. 안 넘기면 현재 드롭다운 값 그대로 사용.
   async function handleTest(overrideTier?: Tier, overrideModelId?: string) {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
@@ -145,12 +174,23 @@ export default function Home() {
     const model = MODELS.find((m) => m.id === modelId)!;
     const modelImageCapable = model.provider === "anthropic" || model.provider === "openai";
     if (image && !modelImageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
+    if (tier === "deep") {
+      if (!baseline) { setError("Deep은 Basic 결과가 필요합니다. 먼저 Basic으로 테스트해주세요."); return; }
+      const inputChanged =
+        baseline.relation !== selectedRelation ||
+        baseline.userMessage !== userMessage ||
+        baseline.imageBase64 !== (image?.base64 ?? null);
+      if (inputChanged) { setError("Basic 실행 이후 입력이 바뀌었습니다. Basic을 다시 테스트해주세요."); return; }
+    }
     setLoading(true); setError(""); setResult(null);
     try {
       const assembled = assemblePrompt(coreContent, relationModule);
       // [관계 유형]/[티어]는 항상 현재 값 기준으로 여기서 새로 조립한다 — 입력창에
       // 박아두면 드롭다운을 나중에 바꿔도 안 따라가는 문제가 있었음.
-      const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n[대화 내용]\n${userMessage}`;
+      const baselineBlock = tier === "deep" && baseline
+        ? `[Basic 분석 ID] ${baseline.analysisId}\n[Basic 분석 기준점] ${JSON.stringify(baseline.basic)}\n`
+        : "";
+      const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n${baselineBlock}[대화 내용]\n${userMessage}`;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -165,6 +205,7 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error);
       setResult({ ...data, cost: calcCost(model, data.inputTokens, data.outputTokens) });
       setLastTestedTier(tier);
+      if (tier === "basic") setBaseline(extractBaseline(data.text));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "테스트 실패");
     } finally {
