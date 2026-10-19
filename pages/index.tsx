@@ -8,6 +8,7 @@ import { RELATIONS, RelationId, assemblePrompt } from "@/lib/relations";
 import { CaseData, formatCaseAsInput, Tier, TIERS } from "@/lib/cases";
 import SettingsModal from "@/components/SettingsModal";
 import PushModal from "@/components/PushModal";
+import { GoalId, GoalOption, resolveGoalOptions } from "@/lib/goals";
 import AnalysisResult, { stripCodeFence } from "@/components/AnalysisResult";
 
 // Deep 호출에 필요한 Basic 기준점. Deep은 "Basic과 동일한 원문"을 요구하므로
@@ -33,6 +34,14 @@ function parseClarification(text: string): Clarification | null {
     return { question: c.question, options: c.options.map(String) };
   } catch {
     return null;
+  }
+}
+
+function parseGoalOptions(text: string, relation: RelationId): GoalOption[] {
+  try {
+    return resolveGoalOptions(JSON.parse(stripCodeFence(text))?.basic?.analysis_goal_options, relation);
+  } catch {
+    return resolveGoalOptions(null, relation);
   }
 }
 
@@ -106,6 +115,8 @@ export default function Home() {
   const [lastTestedTier, setLastTestedTier] = useState<Tier | null>(null);
   const [baseline, setBaseline] = useState<BasicBaseline | null>(null);
   const [speaker, setSpeaker] = useState<SpeakerAnswer | null>(null);
+  // Deep 호출에 쓰는 분석 목적. 새 Basic 결과가 나오면 초기화된다.
+  const [deepGoal, setDeepGoal] = useState<GoalId | null>(null);
 
   useEffect(() => {
     const savedRelation = storage.getSelectedRelation();
@@ -200,7 +211,7 @@ export default function Home() {
   // overrideTier/overrideModelId:"정밀 분석 하시겠습니까?" 버튼처럼 드롭다운과
   // 무관하게 특정 티어/모델로 강제 실행할 때 씀. 안 넘기면 현재 드롭다운 값 그대로 사용.
   // answeredSpeaker: 되묻기 버튼으로 고른 화자. 넘기면 저장하고 이번 호출부터 입력에 포함한다.
-  async function handleTest(overrideTier?: Tier, overrideModelId?: string, answeredSpeaker?: string) {
+  async function handleTest(overrideTier?: Tier, overrideModelId?: string, answeredSpeaker?: string, goal?: GoalId) {
     if (!userMessage.trim()) { setError("유저 메시지를 입력해주세요."); return; }
     if (!promptReady) { setError("먼저 '최신 로드'로 이 관계의 프롬프트를 불러와주세요."); return; }
     const tier = overrideTier ?? selectedTier;
@@ -208,7 +219,9 @@ export default function Home() {
     const model = MODELS.find((m) => m.id === modelId)!;
     const modelImageCapable = model.provider === "anthropic" || model.provider === "openai";
     if (image && !modelImageCapable) { setError("이 모델은 이미지 입력을 지원하지 않습니다. 이미지를 지우거나 Claude/GPT 계열 모델을 선택해주세요."); return; }
+    const goalValue = goal ?? deepGoal;
     if (tier === "deep") {
+      if (!goalValue) { setError("Basic 결과에서 알고 싶은 질문을 먼저 선택해주세요."); return; }
       if (!baseline) { setError("Deep은 Basic 결과가 필요합니다. 먼저 Basic으로 테스트해주세요."); return; }
       if (!isSameInput(baseline)) { setError("Basic 실행 이후 입력이 바뀌었습니다. Basic을 다시 테스트해주세요."); return; }
     }
@@ -222,7 +235,7 @@ export default function Home() {
       // [관계 유형]/[티어]는 항상 현재 값 기준으로 여기서 새로 조립한다 — 입력창에
       // 박아두면 드롭다운을 나중에 바꿔도 안 따라가는 문제가 있었음.
       const baselineBlock = tier === "deep" && baseline
-        ? `[Basic 분석 ID] ${baseline.analysisId}\n[Basic 분석 기준점] ${JSON.stringify(baseline.basic)}\n`
+        ? `[Basic 분석 ID] ${baseline.analysisId}\n[Basic 분석 기준점] ${JSON.stringify(baseline.basic)}\n[Deep 분석 목적] ${goalValue}\n`
         : "";
       const speakerBlock = speakerValue ? `[사용자 화자] ${speakerValue}\n` : "";
       const wrappedMessage = `[관계 유형] ${selectedRelationLabel}\n[티어] ${tier}\n${speakerBlock}${baselineBlock}[대화 내용]\n${userMessage}`;
@@ -240,7 +253,8 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error);
       setResult({ ...data, cost: calcCost(model, data.inputTokens, data.outputTokens) });
       setLastTestedTier(tier);
-      if (tier === "basic") setBaseline(extractBaseline(data.text));
+      if (goal) setDeepGoal(goal);
+      if (tier === "basic") { setBaseline(extractBaseline(data.text)); setDeepGoal(null); }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "테스트 실패");
     } finally {
@@ -249,11 +263,12 @@ export default function Home() {
   }
 
   const clarification = result ? parseClarification(result.text) : null;
+  const goalOptions = result && lastTestedTier === "basic" && baseline ? parseGoalOptions(result.text, baseline.relation) : [];
 
-  function handlePrecisionAnalysis() {
+  function handlePrecisionAnalysis(goal: GoalId) {
     setSelectedTier("deep");
     setSelectedModelId(TIER_DEFAULT_MODEL_ID.deep);
-    handleTest("deep", TIER_DEFAULT_MODEL_ID.deep);
+    handleTest("deep", TIER_DEFAULT_MODEL_ID.deep, undefined, goal);
   }
 
   function handleLoadCase(c: CaseData) {
@@ -678,14 +693,20 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-                {lastTestedTier === "basic" && !clarification && (
-                  <button
-                    onClick={handlePrecisionAnalysis}
-                    disabled={loading}
-                    className="bg-[#2a1e3a] border border-[#4a2d6a] text-[#c9a8f0] font-semibold rounded-xl py-2.5 text-sm hover:bg-[#33244a] disabled:opacity-40 transition-colors"
-                  >
-                    🔒 정밀 분석 하시겠습니까? (Sonnet 4.6)
-                  </button>
+                {lastTestedTier === "basic" && !clarification && goalOptions.length > 0 && (
+                  <div className="bg-[#2a1e3a] border border-[#4a2d6a] rounded-xl p-4 flex flex-col gap-2.5">
+                    <p className="text-sm text-[#c9a8f0] font-semibold">🔒 정밀 분석에서 가장 알고 싶은 건? (Sonnet 4.6)</p>
+                    {goalOptions.map((opt) => (
+                      <button
+                        key={opt.goal}
+                        onClick={() => handlePrecisionAnalysis(opt.goal)}
+                        disabled={loading}
+                        className="text-left bg-[#33244a] border border-[#4a2d6a] text-[#e8eaed] rounded-xl px-4 py-2.5 text-sm hover:bg-[#3d2c58] disabled:opacity-40 transition-colors"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
